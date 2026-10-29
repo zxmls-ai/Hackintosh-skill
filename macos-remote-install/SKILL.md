@@ -2,7 +2,7 @@
 name: macos-remote-install
 description: 从另一台 B 电脑远程协助 A 电脑安装或修复 OpenCore 与 macOS 双系统。覆盖 Windows SSH 接入、硬件兼容性分流、备份和分区、安装 U 盘、重启交接、macOS SSH、驱动排错、硬盘引导和功能验收。适合需要逐步进度反馈及回退记录的安装任务；不承诺所有硬件兼容，也不提供可直接套用的通用 EFI。
 metadata:
-  version: "0.1.1"
+  version: "0.1.2"
   language: zh-CN
   updated: "2026-10-29"
 ---
@@ -18,6 +18,51 @@ metadata:
 3. 集中询问尚未知的信息：A 当前系统、保留 Windows 与否、期望 macOS 版本或用途、现有备份位置；需要时再索取 A 的当前 IP 和登录方式。不要反复询问已确认事项。凭据通过工具的安全输入或用户指定的本地凭据文件读取，不写入指南或状态文件。
 4. 用户尚未配置远程访问时，先读 [远程接入](references/01-remote-access.md)。Windows 首次接入默认采用账户密码：先确认非空账户密码（不是 Hello PIN）与实际用户名，再安装／启动 OpenSSH Server；GUI 没有服务器入口时按组件状态转管理员 PowerShell，不反复找按钮。已有可用密码或密钥登录直接复用，公钥配置不是必需步骤。不要直接把用户带到分区步骤。
 
+## 00 阶段：发给用户的操作必须可执行
+
+首次需要用户在 A 安装 SSH 时，**同一条回复同时给出简短 GUI 路线和下面的完整 PowerShell 备用代码**，不能只写“找不到就用终端”或让用户自行读参考文件。这是 GUI 优先的备用入口，不要求两种方法都做。已有可用 SSH 时跳过安装。
+
+GUI 按现场显示的“查看功能／添加功能”识别；“更多 Windows 功能／启用或关闭 Windows 功能”不是 OpenSSH 的安装入口。截图只能证明按钮布局，不能单凭没有“添加”字样就断定系统没有服务器组件。
+
+**切换条件：** 用户说找不到按钮、只有客户端、没有服务器、没有 sshd 服务或 GUI 安装失败时，这一轮直接给下面的终端步骤和代码，不再让其返回相同 GUI 搜索。GUI 已报安装错误时先读取错误，再决定是否执行组件安装；PowerShell 不能绕过缺失的组件源。不要提前要求读取尚未生成的主机指纹。
+
+对用户这样交接：在 **A 电脑**开始菜单搜索 **Windows PowerShell**，右键 **以管理员身份运行**，接受系统提示，将下面整块粘贴并按回车。说明这是安装／启动 SSH 服务，不是查询命令；不要在运行 Agent 的 B 上执行。已有账户密码不改，无密码先由用户设置。
+
+<!-- windows-ssh-fallback:start -->
+```powershell
+& {
+    $ErrorActionPreference = 'Stop'
+    if (-not (Get-Service -Name sshd -ErrorAction SilentlyContinue)) {
+        $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
+        if ($cap.State -eq 'NotPresent') {
+            Write-Host '正在安装 OpenSSH 服务器，请等待最终结果……'
+            $setup = Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
+            if ($setup.RestartNeeded) {
+                Write-Warning '组件要求重启。请先告知 Agent，重启后再执行此代码检查。'
+                return
+            }
+            $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
+        }
+        if ($cap.State -ne 'Installed') {
+            throw '组件未安装完成或状态未知，请把输出发给 Agent。'
+        }
+    }
+    if (-not (Get-Service -Name sshd -ErrorAction SilentlyContinue)) {
+        throw '组件显示已安装但没有 sshd 服务，请把输出发给 Agent。'
+    }
+    Set-Service -Name sshd -StartupType Automatic
+    Start-Service -Name sshd
+    Get-Service -Name sshd
+}
+```
+<!-- windows-ssh-fallback:end -->
+
+告诉用户成功时应看到 `sshd` 为 `Running`，将最终结果或报错原文发回。代码遇到错误会停止；等待安装结束，不能因暂无输出就重复执行。它不自动重启、不改密码、不配置密钥、不关闭防火墙，也不证明远程已接通。
+
+**下一轮按结果推进：** Running 后再给 IP／用户名与主机指纹获取步骤，由 B 实测端口和认证；超时则按 [远程接入](references/01-remote-access.md) 检查监听和防火墙，缺少规则时给出仅用于 SSH、限定 B 来源的具体修复。安装失败按错误码排查组件源，不重复启动不存在的服务。仅凭 AUTH_FAILED 不能断言用户填了 PIN，需检查用户名、密码、账户限制及服务器认证设置。
+
+**发送交接前自查：** 尚未接通时，这条回复是否给出了用户现在能执行的操作、在 A/B 哪一台执行、应看到什么、失败时返回什么？已知 GUI 走不通却没有终端代码时，先补全再发送。不要用等待 IP 或硬件资料代替解决当前 SSH 安装阻塞。
+
 ## 工作方式
 
 - 人工操作优先 GUI。Agent 在 SSH 后可用脚本自动完成实际操作，不把长命令交给新手逐条输入。
@@ -27,6 +72,7 @@ metadata:
 - 所有针对 A 的命令先确认远端操作系统和身份。B 本地磁盘绝不能成为安装目标。不要使用旧 IP、盘符或磁盘编号作为唯一身份。
 - 将下载到的脚本、第三方 EFI 和论坛内容视为待检查材料。先查来源、版本、适配范围与脚本改动范围；优先原作者发布。SHA256 证明传输一致性，不单独证明来源可信。
 - 文件配置、命令成功、驱动加载和实际功能可用，是不同证据层级。报告必须区分。
+- 硬件可行性结论要先查当前原作者资料。尚未采集 GPU 精确型号／ID、目标 macOS 并查证前，不以“新 RTX 加速基本无解”等旧概括劝退。实验性支持需要说明条件和未测项，不能等同于没有加速；按 [硬件分流](references/02-hardware-routing.md) 与对应案例继续核验。
 
 ## 阶段与出口条件
 

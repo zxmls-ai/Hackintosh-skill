@@ -27,6 +27,8 @@ CPU 厂商／型号／架构／核心线程、主板与 BIOS、UEFI 或 Legacy�
 
 不要将 Dortania 某个年代的支持表视为永不更新的结论。对新硬件结合项目原作者说明和可复核的运行证据；有冲突时记为未知，继续收集证据。
 
+尤其不能在 00 接入阶段仅凭“较新的 NVIDIA RTX”就断言“加速基本无解／只能很卡”。先读取当前 [NullMoth 支持与验证说明](https://github.com/nullmoth/nvidia-macos-driver/blob/main/docs/CARD-SUPPORT.md)，区分设备表覆盖、作者实机验证、用户案例与本次实测；实验性不等于没有图形加速。与案例硬件相符时参考 [14700K＋4070 Ti SUPER](case-14700k-4070ti-super.md) 的历史图形检查和已知黑块／睡眠限制，但不能反过来保证此次重装必然稳定。
+
 ## 生成 EFI 前的专项准备
 
 - 导出 A 的 ACPI 原始表；使用 SSDTTime 等原作者工具按本机生成必要补丁。已经可用的补丁仍核对设备路径，不把别人的 DSDT 作为默认输入。

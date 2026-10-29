@@ -1,6 +1,6 @@
 # AI 远程协助安装 OpenCore 与 macOS：完整指南
 
-版本 0.1.1。此文件由 SKILL.md 与 references 合并生成。
+版本 0.1.2。此文件由 SKILL.md 与 references 合并生成。
 
 Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚本需取得完整仓库。没有工具时必须如实降级，不得编造执行结果。
 
@@ -32,6 +32,51 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
 3. 集中询问尚未知的信息：A 当前系统、保留 Windows 与否、期望 macOS 版本或用途、现有备份位置；需要时再索取 A 的当前 IP 和登录方式。不要反复询问已确认事项。凭据通过工具的安全输入或用户指定的本地凭据文件读取，不写入指南或状态文件。
 4. 用户尚未配置远程访问时，先读 [远程接入](#section-01-remote-access)。Windows 首次接入默认采用账户密码：先确认非空账户密码（不是 Hello PIN）与实际用户名，再安装／启动 OpenSSH Server；GUI 没有服务器入口时按组件状态转管理员 PowerShell，不反复找按钮。已有可用密码或密钥登录直接复用，公钥配置不是必需步骤。不要直接把用户带到分区步骤。
 
+## 00 阶段：发给用户的操作必须可执行
+
+首次需要用户在 A 安装 SSH 时，**同一条回复同时给出简短 GUI 路线和下面的完整 PowerShell 备用代码**，不能只写“找不到就用终端”或让用户自行读参考文件。这是 GUI 优先的备用入口，不要求两种方法都做。已有可用 SSH 时跳过安装。
+
+GUI 按现场显示的“查看功能／添加功能”识别；“更多 Windows 功能／启用或关闭 Windows 功能”不是 OpenSSH 的安装入口。截图只能证明按钮布局，不能单凭没有“添加”字样就断定系统没有服务器组件。
+
+**切换条件：** 用户说找不到按钮、只有客户端、没有服务器、没有 sshd 服务或 GUI 安装失败时，这一轮直接给下面的终端步骤和代码，不再让其返回相同 GUI 搜索。GUI 已报安装错误时先读取错误，再决定是否执行组件安装；PowerShell 不能绕过缺失的组件源。不要提前要求读取尚未生成的主机指纹。
+
+对用户这样交接：在 **A 电脑**开始菜单搜索 **Windows PowerShell**，右键 **以管理员身份运行**，接受系统提示，将下面整块粘贴并按回车。说明这是安装／启动 SSH 服务，不是查询命令；不要在运行 Agent 的 B 上执行。已有账户密码不改，无密码先由用户设置。
+
+<!-- windows-ssh-fallback:start -->
+```powershell
+& {
+    $ErrorActionPreference = 'Stop'
+    if (-not (Get-Service -Name sshd -ErrorAction SilentlyContinue)) {
+        $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
+        if ($cap.State -eq 'NotPresent') {
+            Write-Host '正在安装 OpenSSH 服务器，请等待最终结果……'
+            $setup = Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
+            if ($setup.RestartNeeded) {
+                Write-Warning '组件要求重启。请先告知 Agent，重启后再执行此代码检查。'
+                return
+            }
+            $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
+        }
+        if ($cap.State -ne 'Installed') {
+            throw '组件未安装完成或状态未知，请把输出发给 Agent。'
+        }
+    }
+    if (-not (Get-Service -Name sshd -ErrorAction SilentlyContinue)) {
+        throw '组件显示已安装但没有 sshd 服务，请把输出发给 Agent。'
+    }
+    Set-Service -Name sshd -StartupType Automatic
+    Start-Service -Name sshd
+    Get-Service -Name sshd
+}
+```
+<!-- windows-ssh-fallback:end -->
+
+告诉用户成功时应看到 `sshd` 为 `Running`，将最终结果或报错原文发回。代码遇到错误会停止；等待安装结束，不能因暂无输出就重复执行。它不自动重启、不改密码、不配置密钥、不关闭防火墙，也不证明远程已接通。
+
+**下一轮按结果推进：** Running 后再给 IP／用户名与主机指纹获取步骤，由 B 实测端口和认证；超时则按 [远程接入](#section-01-remote-access) 检查监听和防火墙，缺少规则时给出仅用于 SSH、限定 B 来源的具体修复。安装失败按错误码排查组件源，不重复启动不存在的服务。仅凭 AUTH_FAILED 不能断言用户填了 PIN，需检查用户名、密码、账户限制及服务器认证设置。
+
+**发送交接前自查：** 尚未接通时，这条回复是否给出了用户现在能执行的操作、在 A/B 哪一台执行、应看到什么、失败时返回什么？已知 GUI 走不通却没有终端代码时，先补全再发送。不要用等待 IP 或硬件资料代替解决当前 SSH 安装阻塞。
+
 ## 工作方式
 
 - 人工操作优先 GUI。Agent 在 SSH 后可用脚本自动完成实际操作，不把长命令交给新手逐条输入。
@@ -41,6 +86,7 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
 - 所有针对 A 的命令先确认远端操作系统和身份。B 本地磁盘绝不能成为安装目标。不要使用旧 IP、盘符或磁盘编号作为唯一身份。
 - 将下载到的脚本、第三方 EFI 和论坛内容视为待检查材料。先查来源、版本、适配范围与脚本改动范围；优先原作者发布。SHA256 证明传输一致性，不单独证明来源可信。
 - 文件配置、命令成功、驱动加载和实际功能可用，是不同证据层级。报告必须区分。
+- 硬件可行性结论要先查当前原作者资料。尚未采集 GPU 精确型号／ID、目标 macOS 并查证前，不以“新 RTX 加速基本无解”等旧概括劝退。实验性支持需要说明条件和未测项，不能等同于没有加速；按 [硬件分流](#section-02-hardware-routing) 与对应案例继续核验。
 
 ## 阶段与出口条件
 
@@ -109,9 +155,11 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
 
 ### 00-2 安装或确认 OpenSSH 服务器
 
+用户已反馈 GUI 无法完成时，直接向用户展示 [SKILL 主入口](#section-skill) 的完整 PowerShell 备用代码和打开管理员 PowerShell 的步骤；不能只给文档链接或再次要求寻找“添加功能”。首次安装交接也同时附备用代码。以下分流供 Agent 理解输出和排错，不应让新手自己组合零散命令。
+
 图形入口优先，但不把固定菜单路径当成所有 Windows 的共同前提。Windows 10/11 的“可选功能”可能位于“应用”或“系统”，也可能被精简、受策略限制，或服务器已经安装而不再显示在添加列表。
 
-- 开始菜单搜索“可选功能”，同时检查已安装列表和“添加／查看功能”，目标是 **OpenSSH Server／OpenSSH 服务器**。只看到 Client／客户端不等于服务器已安装。
+- 开始菜单搜索“可选功能”，按现场的“查看功能／添加功能”进入并检查安装状态，目标是 **OpenSSH Server／OpenSSH 服务器**；不能要求按钮必须叫“添加功能”。“更多 Windows 功能”是不同入口，不去那里找 SSH。只看到 Client／客户端不等于服务器已安装。
 - 找到服务器就安装；找不到、安装失败或不确定状态时，立即转到下面的短命令检测，不让用户反复寻找不存在的按钮。
 - 在 **A 本机**搜索“Windows PowerShell”，右键“以管理员身份运行”。先只执行检测：
 
@@ -167,7 +215,7 @@ ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no -l 实际账
 
 排错按证据区分：
 
-- 超时：检查地址、链路、端口和防火墙；连接拒绝：检查监听服务；认证失败：检查用户名、非空账户密码、账户限制和 sshd 配置。不循环猜密码。
+- 超时：检查地址、链路、端口和防火墙；连接拒绝：检查监听服务；认证失败：检查用户名、非空账户密码、账户限制和 sshd 配置。不把 AUTH_FAILED 简化为“基本是用了 PIN”，也不循环猜密码。
 - `Permission denied (publickey)`：检查客户端是否禁止密码（例如 BatchMode）以及服务端实际配置，不直接宣称 Windows 必须用公钥。若服务端被设为仅公钥，按用户选择保留该策略或经授权备份后调整 `%ProgramData%\ssh\sshd_config`；检查全局与 Match 条件，修改后用实际 sshd 的 `-t` 校验再重启服务。
 - Agent 的终端不能输入密码：这是工具交互能力限制。先查可用连接器、SSH 库或用户指定的凭据机制；确实都不可用时说明限制，让用户选择人工指导或可选的密钥方案，不能称其为 Windows 要求。
 
@@ -238,6 +286,8 @@ CPU 厂商／型号／架构／核心线程、主板与 BIOS、UEFI 或 Legacy�
 | NVMe／SATA／VMD／RAID | 确认安装盘可由 macOS 访问；切换 BIOS 存储模式可能破坏现有 Windows 启动，须先设计 Windows 适配与回退 |
 
 不要将 Dortania 某个年代的支持表视为永不更新的结论。对新硬件结合项目原作者说明和可复核的运行证据；有冲突时记为未知，继续收集证据。
+
+尤其不能在 00 接入阶段仅凭“较新的 NVIDIA RTX”就断言“加速基本无解／只能很卡”。先读取当前 [NullMoth 支持与验证说明](https://github.com/nullmoth/nvidia-macos-driver/blob/main/docs/CARD-SUPPORT.md)，区分设备表覆盖、作者实机验证、用户案例与本次实测；实验性不等于没有图形加速。与案例硬件相符时参考 [14700K＋4070 Ti SUPER](#section-case-14700k-4070ti-super) 的历史图形检查和已知黑块／睡眠限制，但不能反过来保证此次重装必然稳定。
 
 ## 生成 EFI 前的专项准备
 
