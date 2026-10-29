@@ -2,7 +2,7 @@
 name: macos-remote-install
 description: 从另一台 B 电脑远程协助 A 电脑安装或修复 OpenCore 与 macOS 双系统。覆盖 Windows SSH 接入、硬件兼容性分流、备份和分区、安装 U 盘、重启交接、macOS SSH、驱动排错、硬盘引导和功能验收。适合需要逐步进度反馈及回退记录的安装任务；不承诺所有硬件兼容，也不提供可直接套用的通用 EFI。
 metadata:
-  version: "0.1.0"
+  version: "0.1.1"
   language: zh-CN
   updated: "2026-10-29"
 ---
@@ -16,7 +16,7 @@ metadata:
 1. 读取已有任务目录的 `state.json`、`journal.jsonl` 和 `NEXT.md`（如果存在），随后核对现场，不能凭记录直接继续写盘。
 2. 检查自身是否能读取本包、在 B 执行程序、联网查项目原始资料、SSH/SFTP 连接 A，以及理解用户反馈的照片。没有相应工具就明确降级到指导模式，不虚构已执行。
 3. 集中询问尚未知的信息：A 当前系统、保留 Windows 与否、期望 macOS 版本或用途、现有备份位置；需要时再索取 A 的当前 IP 和登录方式。不要反复询问已确认事项。凭据通过工具的安全输入或用户指定的本地凭据文件读取，不写入指南或状态文件。
-4. 用户尚未配置远程访问时，先给出 [远程接入](references/01-remote-access.md) 中当前系统的图形操作。不要直接把用户带到分区步骤。
+4. 用户尚未配置远程访问时，先读 [远程接入](references/01-remote-access.md)。Windows 首次接入默认采用账户密码：先确认非空账户密码（不是 Hello PIN）与实际用户名，再安装／启动 OpenSSH Server；GUI 没有服务器入口时按组件状态转管理员 PowerShell，不反复找按钮。已有可用密码或密钥登录直接复用，公钥配置不是必需步骤。不要直接把用户带到分区步骤。
 
 ## 工作方式
 

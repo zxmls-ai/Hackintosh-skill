@@ -4,7 +4,7 @@
 
 让运行在 **B 电脑**上的 Agent，通过远程连接协助 **A 电脑**安装、调试与验收 macOS，保留 Windows。面向小白，把能够自动完成的工作交给 Agent，现场操作优先使用 GUI。
 
-**v0.1.0：首次公开测试版。** 提供通用决策流程与检查工具，没有一份适用于所有机器的 EFI。能够评估不同硬件，并在缺少支持时说明限制；不承诺所有电脑都能安装或所有功能完美。实际执行主路线为 x86-64 UEFI PC。
+**v0.1.1：修正 Windows 首次远程接入。** 提供通用决策流程与检查工具，没有一份适用于所有机器的 EFI。能够评估不同硬件，并在缺少支持时说明限制；不承诺所有电脑都能安装或所有功能完美。实际执行主路线为 x86-64 UEFI PC。
 
 ## 给 Agent 一个仓库链接
 
@@ -28,7 +28,7 @@
 | [macos-remote-install/SKILL.md](macos-remote-install/SKILL.md) | 跨 Agent 的精简技能入口，按阶段加载资料 |
 | [AI-GUIDE.md](AI-GUIDE.md) | 从相同内容合成的单文件指南，适合直接附给 Agent |
 | [START-HERE.md](START-HERE.md) | 本地文件夹／WorkBuddy 使用方式 |
-| [WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.1.0.zip) | 需要本地技能导入时下载；未实测客户端导入 |
+| [WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.1.1.zip) | 需要本地技能导入时下载；新版流程待实机复测 |
 | [references](macos-remote-install/references/) | SSH、兼容性、备份分区、EFI、安装、驱动、排错、续接 |
 | [scripts](macos-remote-install/scripts/) | 只读采集、磁盘身份核对、文件校验、进度记录 |
 | [案例参考](macos-remote-install/references/case-14700k-4070ti-super.md) | 14700K＋4070 Ti SUPER 的脱敏经验及未解决问题 |
@@ -36,6 +36,10 @@
 | [TEST-FEEDBACK.md](TEST-FEEDBACK.md) | 实机测试反馈表 |
 
 阶段：接通 Windows SSH → 采集和兼容性判断 → 备份与空间规划 → EFI 与恢复 U 盘 → 用户协助启动安装 → 接通 macOS SSH → 驱动和功能检查 → 硬盘独立引导与交付。
+
+**开始前：** 默认使用 A 的 Windows 实际账户名与非空账户密码连接，Hello PIN 不能代替密码；不要求先配置公钥。“可选功能”中找不到 OpenSSH 服务器时，Agent 应检查是否已安装，并按实际状态给出管理员 PowerShell 安装步骤。详细分流见 [00 远程接入](macos-remote-install/references/01-remote-access.md)。
+
+**正在测试旧版的用户：** 保留现有任务记录、已安装服务和可用连接。让 Agent 获取 v0.1.1 对应的仓库提交或重新导入新版 WorkBuddy 包，重新读取 SKILL 与远程接入参考，核对现场后续接；不要只刷新网页后假定本地旧 Skill 已更新，也不要为升级指南重装系统。固定并记录新提交号，其余阶段继续按该快照执行。
 
 ## 自动化的边界
 

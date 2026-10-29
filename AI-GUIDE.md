@@ -1,6 +1,6 @@
 # AI 远程协助安装 OpenCore 与 macOS：完整指南
 
-版本 0.1.0。此文件由 SKILL.md 与 references 合并生成。
+版本 0.1.1。此文件由 SKILL.md 与 references 合并生成。
 
 Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚本需取得完整仓库。没有工具时必须如实降级，不得编造执行结果。
 
@@ -30,7 +30,7 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
 1. 读取已有任务目录的 `state.json`、`journal.jsonl` 和 `NEXT.md`（如果存在），随后核对现场，不能凭记录直接继续写盘。
 2. 检查自身是否能读取本包、在 B 执行程序、联网查项目原始资料、SSH/SFTP 连接 A，以及理解用户反馈的照片。没有相应工具就明确降级到指导模式，不虚构已执行。
 3. 集中询问尚未知的信息：A 当前系统、保留 Windows 与否、期望 macOS 版本或用途、现有备份位置；需要时再索取 A 的当前 IP 和登录方式。不要反复询问已确认事项。凭据通过工具的安全输入或用户指定的本地凭据文件读取，不写入指南或状态文件。
-4. 用户尚未配置远程访问时，先给出 [远程接入](#section-01-remote-access) 中当前系统的图形操作。不要直接把用户带到分区步骤。
+4. 用户尚未配置远程访问时，先读 [远程接入](#section-01-remote-access)。Windows 首次接入默认采用账户密码：先确认非空账户密码（不是 Hello PIN）与实际用户名，再安装／启动 OpenSSH Server；GUI 没有服务器入口时按组件状态转管理员 PowerShell，不反复找按钮。已有可用密码或密钥登录直接复用，公钥配置不是必需步骤。不要直接把用户带到分区步骤。
 
 ## 工作方式
 
@@ -90,18 +90,98 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
 
 优先使用客户端已有 SSH 连接器或系统 SSH。禁止为本任务关闭 B/A 的整个防火墙或绕过客户端审批。两台电脑先保持同一可达局域网；远程跨网时需要用户已有且授权的 VPN 或其他连接，不能擅自做公网端口转发。
 
-## A 是 Windows：先给用户 GUI 指引
+## A 是 Windows：先账户，再服务器，再连接
 
-一次给出当前需要的几个步骤；用户已经配置 SSH 时直接验证，不要求重做。
+一次给出当前需要的几个步骤，并说明在 A 还是 B 操作。已经能连接的 SSH 直接复用并核对身份，不要求重装或更换认证方式。
 
-1. 开始菜单搜索“可选功能”，进入设置，选择添加／查看功能，安装 **OpenSSH Server／OpenSSH 服务器**。只安装 Client 不会出现 sshd 服务。Windows 版本导致入口变化时使用设置搜索。
-2. 开始菜单搜索“服务”，找到 **OpenSSH SSH Server**，设为“自动”，点击启动。没有该服务先确认服务器组件安装完成，不重复 Start-Service。
-3. 打开“设置→网络和 Internet”，查看当前有线网络 IPv4 地址。用户提供 A 的地址、Windows 实际账户名和登录方式。Windows Hello PIN 通常不能代替账户密码。
-4. 由 B 检查 TCP 22 和 SSH。连接失败区分：超时（网络／防火墙）、拒绝（无监听）、认证失败（账户／密钥）、权限不足；不要靠不停换密码排错。
+### 00-1 先确认账户与登录方式
 
-微软原始说明：[安装与启用 OpenSSH](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse)。可选功能缺失或安装报错时，在 A 本机管理员终端确认组件状态和系统服务；如需命令，只给短且能解释的必要操作，不从不明镜像下载 sshd。
+默认以 **Windows 实际账户名＋账户密码** 完成首次接入，公钥不是前置条件。用户已有可用密钥或明确选择公钥时沿用其选择。[微软文档确认 Windows OpenSSH 支持 password 与 publickey](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh-server-configuration)。
 
-服务安装通常附带入站规则。若规则缺失，创建专用于 SSH 的规则并按实际需要限定 B 地址与网络配置文件；不修改已有无关规则。需要修改规则前先记录现状。
+在开始安装 SSH 前告诉用户：
+
+1. 采用密码登录时，A 的账户应有**非空账户密码**。平时自动登录、使用 PIN 或指纹，并不证明自己知道账户密码；Windows Hello PIN 不能填进 SSH 的密码提示。这个条件针对密码登录，不代表所有密钥登录都要求先设置密码。
+2. 本地账户没有密码：在 A 的“设置→账户→登录选项→密码→添加”设置，由用户自己输入。已有密码则不改。入口缺失时先确认账户类型，不关闭空密码限制来绕过。[空密码限制说明](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/accounts-limit-local-account-use-of-blank-passwords-to-console-logon-only)
+3. 确认实际用户名，不用桌面的显示昵称猜测。必要时让用户在 A 的终端运行 `whoami`；安装服务及后续磁盘操作需要管理员权限，但“SSH 能登录”和“远程会话能管理磁盘”仍分开验证。
+4. Microsoft 在线账户／仅 Hello 登录／组织账户需要先确认是否有可用于 SSH 的账户凭据。失败时按账户类型查证，不假设电子邮件地址必然是 SSH 用户名；Entra 账户认证不受 Windows OpenSSH 支持。需要独立本地管理员时，说明用途并在用户同意后通过“设置→账户→其他用户”创建，不擅自替换现有账户。
+
+密码通过客户端凭据输入或用户指定的本地凭据文件交给 B；Agent 可以在内部读取并调用支持密码的 SSH 库／连接器，不回显内容、不把密码放在进程参数里。不要把“不要将密码写进聊天或日志”误读成“只能使用公钥”。
+
+### 00-2 安装或确认 OpenSSH 服务器
+
+图形入口优先，但不把固定菜单路径当成所有 Windows 的共同前提。Windows 10/11 的“可选功能”可能位于“应用”或“系统”，也可能被精简、受策略限制，或服务器已经安装而不再显示在添加列表。
+
+- 开始菜单搜索“可选功能”，同时检查已安装列表和“添加／查看功能”，目标是 **OpenSSH Server／OpenSSH 服务器**。只看到 Client／客户端不等于服务器已安装。
+- 找到服务器就安装；找不到、安装失败或不确定状态时，立即转到下面的短命令检测，不让用户反复寻找不存在的按钮。
+- 在 **A 本机**搜索“Windows PowerShell”，右键“以管理员身份运行”。先只执行检测：
+
+```powershell
+Get-Service -Name sshd -ErrorAction SilentlyContinue
+Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' -ErrorAction Stop
+```
+
+按输出分流：
+
+| 结果 | 下一步 |
+|---|---|
+| 已存在 sshd 服务 | 检查其安装来源与运行状态，直接进入启动／验证；不要叠装第二套 OpenSSH |
+| 无 sshd，Server 状态 NotPresent | 执行下面的安装命令，等待最终输出 |
+| 状态 Installed，但无 sshd | 安装／服务异常，读取具体错误和系统状态；不反复执行 Start-Service |
+| 查询无结果或报错，或出现其他状态 | 获取 winver 的版本／build 与完整错误；检查组件源、精简系统、策略及待重启状态，不自动视为 NotPresent |
+
+仅在确定未安装且在线组件可用时执行：
+
+```powershell
+Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' -ErrorAction Stop
+```
+
+看到下载进度不是安装完成。安装结束后重新检查组件状态与 sshd 服务；若 `RestartNeeded` 为 True，保存阶段状态并安排用户重启，再验证。安装失败不继续执行服务启动命令。[微软安装说明](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse)
+
+遇到 0x800f0954、0x800f081f 等错误或长时间无进展，保留错误码并检查 Windows Update／WSUS／FoD 来源，不承诺终端命令必定成功。按[微软故障说明](https://learn.microsoft.com/en-us/troubleshoot/windows-server/system-management-components/cant-install-openssh-features)选择匹配系统版本的 FoD 源；系统组件途径不可用时，再评估微软维护的 [Win32-OpenSSH 发布包](https://github.com/PowerShell/Win32-OpenSSH/releases)，核对架构、版本及该包的安装说明。不要混装两种来源、关闭组织策略或下载不明整合包。
+
+### 00-3 启动服务并检查网络
+
+确认服务存在后，可在 A 的“服务”中将 **OpenSSH SSH Server** 设为“自动”并启动。已经打开管理员 PowerShell 时也可用：
+
+```powershell
+Set-Service -Name sshd -StartupType Automatic -ErrorAction Stop
+Start-Service -Name sshd -ErrorAction Stop
+Get-Service -Name sshd
+Get-NetTCPConnection -State Listen -LocalPort 22 -ErrorAction SilentlyContinue
+Get-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -ErrorAction SilentlyContinue
+```
+
+状态应为 Running，并确认 sshd 实际监听端口（默认 22，自定义配置按实际端口）。安装一般会创建入站规则；规则不存在、禁用或与当前网络配置不匹配时，先记录现状，按实际需要创建／调整仅用于 SSH 的规则，来源限定 B 的地址，不关闭整个防火墙，不覆盖无关规则。上述命令只检查规则，不会自动修复缺失规则。
+
+A 在“设置→网络和 Internet”查看当前有线 IPv4，或用 `ipconfig`。B 检查到这个地址的实际 SSH 端口，随后尝试认证；端口可达不算 SSH 登录成功。
+
+### 00-4 用密码完成真实连接
+
+Agent 优先使用已有 SSH 连接器或支持密码认证的库，通过受控输入／用户指定文件读取凭据。若用系统 SSH 做交互验证，可在 **B** 的终端运行下面的示例，把两个占位内容换成 A 的实际值：
+
+```text
+ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no -l 实际账户名 A的IPv4地址
+```
+
+先核对首次连接指纹，再输入账户密码；输入时没有星号或文字是正常现象。这条命令仅对本次连接优先使用密码，不修改 A 的认证配置。用户在另一个终端登录成功，只能证明那条连接可用；Agent 仍需验证自己使用的工具会话。
+
+排错按证据区分：
+
+- 超时：检查地址、链路、端口和防火墙；连接拒绝：检查监听服务；认证失败：检查用户名、非空账户密码、账户限制和 sshd 配置。不循环猜密码。
+- `Permission denied (publickey)`：检查客户端是否禁止密码（例如 BatchMode）以及服务端实际配置，不直接宣称 Windows 必须用公钥。若服务端被设为仅公钥，按用户选择保留该策略或经授权备份后调整 `%ProgramData%\ssh\sshd_config`；检查全局与 Match 条件，修改后用实际 sshd 的 `-t` 校验再重启服务。
+- Agent 的终端不能输入密码：这是工具交互能力限制。先查可用连接器、SSH 库或用户指定的凭据机制；确实都不可用时说明限制，让用户选择人工指导或可选的密钥方案，不能称其为 Windows 要求。
+
+主机指纹用于确认“连到的是否是 A”，与“给用户安装登录公钥”不是一回事。密码登录也要核验主机指纹。默认 Windows 组件可在 A 本机显示指纹：
+
+```powershell
+& "$env:WINDIR\System32\OpenSSH\ssh-keygen.exe" -lf "$env:ProgramData\ssh\ssh_host_ed25519_key.pub"
+```
+
+仅用于默认路径且该文件存在的安装；自定义来源应查实际工具路径和 sshd HostKey 配置。比较 B 所显示的同种算法指纹，不把主机公钥复制到 authorized_keys。
+
+### 公钥登录是可选优化
+
+仅在用户选择、已有可用密钥，或确认客户端没有可用密码输入机制并取得用户同意后配置。已经能用密码自动执行操作时无需迁移。按[微软公钥认证说明](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_keymanagement)处理管理员账户的 authorized_keys 路径与权限；私钥留在 B。独立验证新连接成功前保留原有可用登录方式，不因生成了密钥就宣布远程接入完成。
 
 ## B 建立连接后
 
@@ -109,8 +189,7 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
 - 先执行无副作用的身份检查，例如远端 `hostname`、Windows 系统信息和 `whoami`；记录 A 的物理硬件身份。检查当前远程会话的管理员权限，不因账户名是 Administrator 就假设已获得所有权限。
 - 上传并通过远端 PowerShell 运行 `scripts/collect-windows.ps1 -OutputPath <A上的报告绝对路径>`。建议通过 SFTP 上传脚本而非拼接复杂引号。Windows PowerShell 5.1 脚本文件需保留包内 UTF-8 BOM。
 - 从 A 取回 JSON 后读取 `errors`。采集失败的字段是未知，不是“不存在”。获取报告只是第一步，仍需 ACPI、USB 端口与显示连接等后续采集。
-- 优先建立经用户授权的 SSH 密钥认证，以便 Agent 非交互运行。私钥留在 B 的受控位置；不放入可分享包。Windows 管理员账户的 authorized_keys 位置与权限按[微软公钥认证说明](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_keymanagement)处理，不照抄 Linux 路径。
-- 若 Agent 无安全密码输入渠道，请用户在自己的终端完成首次密钥配置，或使用其指定的本地凭据机制。不把密码拼入进程命令行、日志或聊天。
+- 记录已验证的认证方式及凭据取得机制，不保存密码内容；密码连接与公钥连接均可完成本阶段。阶段出口是 Agent 自身会话成功执行身份检查并完成一次 SFTP 小文件往返核验，或明确告知用户当前仅能人工指导。
 - SSH 的 GUI 程序可能运行在用户看不见的会话。优先 CLI；确实只能 GUI 时交给用户操作或使用明确可用的桌面控制工具，不无限重复启动程序。
 
 ## A 是 macOS：安装后重新接管
@@ -550,6 +629,10 @@ python scripts/agentkit.py check-efi --root <准备中的EFI目录>
 - [Agent Skills 规范](https://agentskills.io/specification)
 - [WorkBuddy 技能结构](https://open.workbuddy.cn/docs/skill)
 - [Windows OpenSSH 配置](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse)
+- [Windows OpenSSH 认证与服务器配置](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh-server-configuration)
+- [OpenSSH 可选组件安装故障](https://learn.microsoft.com/en-us/troubleshoot/windows-server/system-management-components/cant-install-openssh-features)
+- [Windows 本地空密码远程登录限制](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/accounts-limit-local-account-use-of-blank-passwords-to-console-logon-only)
+- [Windows Hello PIN 与密码的区别](https://learn.microsoft.com/en-us/windows/security/identity-protection/hello-for-business/faq)
 - [Windows OpenSSH 公钥管理](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_keymanagement)
 - [Apple 远程登录](https://support.apple.com/guide/mac-help/allow-a-remote-computer-to-access-your-mac-mchlp1066/mac)
 

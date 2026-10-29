@@ -7,6 +7,10 @@
 - [Agent Skills 规范](https://agentskills.io/specification)
 - [WorkBuddy 技能结构](https://open.workbuddy.cn/docs/skill)
 - [Windows OpenSSH 配置](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse)
+- [Windows OpenSSH 认证与服务器配置](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh-server-configuration)
+- [OpenSSH 可选组件安装故障](https://learn.microsoft.com/en-us/troubleshoot/windows-server/system-management-components/cant-install-openssh-features)
+- [Windows 本地空密码远程登录限制](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/accounts-limit-local-account-use-of-blank-passwords-to-console-logon-only)
+- [Windows Hello PIN 与密码的区别](https://learn.microsoft.com/en-us/windows/security/identity-protection/hello-for-business/faq)
 - [Windows OpenSSH 公钥管理](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_keymanagement)
 - [Apple 远程登录](https://support.apple.com/guide/mac-help/allow-a-remote-computer-to-access-your-mac-mchlp1066/mac)
 

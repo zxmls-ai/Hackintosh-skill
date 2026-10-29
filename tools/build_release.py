@@ -13,7 +13,7 @@ SKILL = ROOT / "macos-remote-install"
 sys.path.insert(0, str(SKILL / "scripts"))
 from agentkit import no_link, sha
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 REF_NAMES = ["01-remote-access", "02-hardware-routing", "03-storage", "04-installer",
              "05-boot-handoff", "06-postinstall", "07-troubleshooting", "08-state-and-tools",
              "case-14700k-4070ti-super", "sources"]
