@@ -1,0 +1,26 @@
+# Private installation sessions must not become public repository contents.
+runs/
+private/
+dist/
+__pycache__/
+*.pyc
+.venv/
+.env
+.env.*
+*.key
+*.pem
+id_rsa*
+id_ed25519*
+*.dmg
+*.chunklist
+*.iso
+*.img
+*.qcow2
+*.vhd*
+EFI/
+*.log
+*.zip
+# Small, reviewed public skill artifact. Regenerate with tools/build_release.py.
+!downloads/macos-remote-install-workbuddy-v*.zip
+.DS_Store
+Thumbs.db
