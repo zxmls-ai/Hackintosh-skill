@@ -21,7 +21,9 @@
         if (-not $isAdmin) { throw '请在 A 电脑以管理员身份打开 Windows PowerShell，再粘贴整块代码。' }
 
         $step = '安装服务器'
+        $serverSource = 'existing'
         if (-not (Get-Service -Name sshd -ErrorAction SilentlyContinue)) {
+            $serverSource = 'installed-now'
             $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
             if ($cap.State -eq 'NotPresent') {
                 $setup = Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
@@ -39,7 +41,7 @@
 
         $step = '启动并检查监听'
         Set-Service -Name sshd -StartupType Automatic
-        Start-Service -Name sshd
+        if ((Get-Service -Name sshd).Status -ne 'Running') { Start-Service -Name sshd }
         $listen = @()
         for ($attempt = 0; $attempt -lt 15; $attempt++) {
             $svc = Get-CimInstance -ClassName Win32_Service -Filter "Name='sshd'"
@@ -89,8 +91,11 @@
         $fingerprints = @()
         foreach ($keyFile in @(Get-ChildItem -LiteralPath $keyDirectory -Filter 'ssh_host_*_key.pub' -File)) {
             $keyText = (& $keygen -l -E sha256 -f $keyFile.FullName | Out-String).Trim()
-            if ($LASTEXITCODE -ne 0 -or $keyText -notmatch '(SHA256:[A-Za-z0-9+/]+)\s+.*\(([^)]+)\)$') {
-                throw '主机公钥指纹读取失败。'
+            if ($LASTEXITCODE -ne 0) {
+                throw ('ssh-keygen 读取公钥失败，退出码：' + $LASTEXITCODE + '；文件：' + $keyFile.Name)
+            }
+            if ($keyText -notmatch '(SHA256:[A-Za-z0-9+/]+)\s+.*[(]([^)]+)[)]$') {
+                throw ('主机公钥指纹输出格式未识别：' + $keyText)
             }
             $fingerprints += [ordered]@{algorithm=$Matches[2];sha256=$Matches[1]}
         }
@@ -108,14 +113,15 @@
         $report.port = 22
         $report.ipv4 = @($lan | ForEach-Object { [ordered]@{ip=$_.IPAddress;prefix=$_.PrefixLength;interface=$_.InterfaceAlias} })
         $report.host_keys = $fingerprints
-        $report.checks = [ordered]@{service='Running';startup='Auto';listener='sshd:22';firewall='LocalSubnet/AnyProfile'}
+        $report.checks = [ordered]@{server=$serverSource;service='Running';startup='Auto';listener='sshd:22';firewall='LocalSubnet/AnyProfile'}
         $report.network = [ordered]@{b_ipv4=@($BIPv4);same_subnet_from_a=$sameSubnet;matching_a=@($matching);connectivity='pending-b-test'}
     } catch {
         $report.failed_step = $step
         $report.error = $_.Exception.Message
     }
     if ($report.status -eq 'local-ready') {
-        Write-Host '进度：00 远程接入｜本机配置与检查完成。'
+        $serverLabel = if ($report.checks.server -eq 'existing') {'复用已有 SSH'} else {'已安装 SSH'}
+        Write-Host ('进度：00 远程接入｜' + $serverLabel + '，本机配置与检查完成。')
         Write-Host '下一步：B 自动核对指纹、连接 SSH 并采集硬件。'
         Write-Host '需要你：将下面整行结果发给 B；如尚未提供，再补充账户密码和目标 macOS 版本（未定也可以）。'
     } else {

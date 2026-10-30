@@ -13,14 +13,15 @@ SKILL = ROOT / "macos-remote-install"
 sys.path.insert(0, str(SKILL / "scripts"))
 from agentkit import no_link, sha
 
-VERSION = "0.1.4"
+VERSION = "0.1.5"
 REF_NAMES = ["01-remote-access", "02-hardware-routing", "03-storage", "04-installer",
              "05-boot-handoff", "06-postinstall", "07-troubleshooting", "08-state-and-tools",
              "case-14700k-4070ti-super", "sources"]
 SOURCE_DOCS = [SKILL / "SKILL.md"] + [SKILL / "references" / (name + ".md") for name in REF_NAMES]
 TOP_FILES = ["README.md", "START-HERE.md", "AI-GUIDE.md", "LICENSE", ".gitignore",
              "CONTRIBUTING.md", "TEST-FEEDBACK.md", "VALIDATION.md", "PUBLISH.md", "CHANGELOG.md"]
-SCRIPTS = ["agentkit.py", "target_guard.py", "collect-windows.ps1", "collect-macos.sh", "enable-windows-ssh.ps1"]
+SCRIPTS = ["agentkit.py", "target_guard.py", "collect-windows.ps1", "collect-macos.sh", "enable-windows-ssh.ps1", "prepare_ssh_handoff.py"]
+CODE = re.compile(r"(^```[^\n]*\n.*?^```[ \t]*$|`[^`\n]*`)", re.MULTILINE | re.DOTALL)
 
 
 def sync_ssh_handoff():
@@ -55,7 +56,9 @@ def make_guide():
                 return match.group(0)
             target = (p.parent / link.split("#", 1)[0]).resolve()
             return f"[{label}](#{anchors[target]})" if target in anchors else match.group(0)
-        t = re.sub(r"\[([^\]\n]+)\]\(([^)\n]+)\)", rewrite, t)
+        pieces = CODE.split(t)
+        t = ''.join(part if index % 2 else re.sub(r"\[([^\]\n]+)\]\(([^)\n]+)\)", rewrite, part)
+                    for index, part in enumerate(pieces))
         content.append(f'\n\n<a id="{anchors[p.resolve()]}"></a>\n\n{t}')
     (ROOT / "AI-GUIDE.md").write_text("\n".join(content).rstrip() + "\n", encoding="utf-8")
 
@@ -76,7 +79,7 @@ def workbuddy_skill():
 def source_files():
     selected = [ROOT / name for name in TOP_FILES] + SOURCE_DOCS
     selected += [SKILL / "scripts" / name for name in SCRIPTS]
-    selected += [SKILL / "LICENSE", ROOT / "tests" / "test_helpers.py", ROOT / "tests" / "test_collect_windows.py", ROOT / "tests" / "test_ssh_handoff.py",
+    selected += [SKILL / "LICENSE", ROOT / "tests" / "test_helpers.py", ROOT / "tests" / "test_collect_windows.py", ROOT / "tests" / "test_ssh_handoff.py", ROOT / "tests" / "test_prepare_ssh_handoff.py",
                  ROOT / "tools" / "build_release.py", ROOT / ".github" / "ISSUE_TEMPLATE" / "installation-feedback.md"]
     for p in selected:
         no_link(p)
@@ -87,7 +90,7 @@ def source_files():
 def check_local_links(paths):
     for p in paths:
         if p.suffix != ".md": continue
-        text = p.read_text(encoding="utf-8-sig")
+        text = CODE.sub('', p.read_text(encoding="utf-8-sig"))
         for label, link in re.findall(r"\[([^\]\n]+)\]\(([^)\n]+)\)", text):
             if "://" in link or link.startswith(("#", "mailto:")): continue
             link = link.split("#", 1)[0]

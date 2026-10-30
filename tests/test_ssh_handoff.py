@@ -1,5 +1,7 @@
 """Execute the shipped handoff with all OS queries and mutations mocked."""
 import json
+import base64
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -15,7 +17,7 @@ $script:calls = [System.Collections.Generic.List[string]]::new()
 $script:messages = [System.Collections.Generic.List[string]]::new()
 $script:packets = [System.Collections.Generic.List[string]]::new()
 $script:present = $scenario -notin @('new','install-fails','restart','unknown','installed-no-service','post-not-installed')
-$script:running = $false
+$script:running = $scenario -eq 'existing-running'
 $script:mode = 'Manual'
 $script:probes = 0
 $script:rule = $null
@@ -126,6 +128,7 @@ function Invoke-MockKeygen {
     $global:LASTEXITCODE = 0
     if ($scenario -eq 'keygen-fails') { $global:LASTEXITCODE=1; return 'Failure' }
     if ($scenario -eq 'bad-fingerprint') { return '256 MD5:bad example (ED25519)' }
+    if ($scenario -eq 'native-output') { return $nativeKeyText }
     $algorithm = if ($f -like '*rsa*') {'RSA'} else {'ED25519'}
     '256 SHA256:' + ('A' * 43) + ' example@fixture (' + $algorithm + ')'
 }
@@ -148,11 +151,19 @@ class HandoffSourceTests(unittest.TestCase):
         source = (ROOT / 'macos-remote-install/scripts/enable-windows-ssh.ps1').read_text(encoding='utf-8-sig').rstrip()
         self.assertEqual(documented_code(), source)
 
+    def test_generated_guide_does_not_rewrite_regex_as_markdown_links(self):
+        guide = (ROOT / 'AI-GUIDE.md').read_text(encoding='utf-8')
+        segment = guide.split('<!-- windows-ssh-setup:start -->', 1)[1].split('<!-- windows-ssh-setup:end -->', 1)[0]
+        actual = re.search(r'```powershell\s*\n(.*?)```', segment, re.S).group(1).rstrip()
+        self.assertEqual(actual, documented_code())
+
 
 @unittest.skipUnless(os.name == 'nt' and SHELL, 'Windows PowerShell required for mocked handoff')
 class SSHHandoffTests(unittest.TestCase):
-    def run_scenario(self, scenario, twice=False, b_ips=()):
+    def run_scenario(self, scenario, twice=False, b_ips=(), transform=None, native_output=''):
         code = documented_code()
+        if transform:
+            code = transform(code)
         # Only substitute the read-only token check; no test requires administrator access.
         code, count = re.subn(r'(?m)^\s*\$isAdmin = .*$', '        $isAdmin = ' + ('$false' if scenario == 'not-admin' else '$true'), code)
         self.assertEqual(count, 1)
@@ -179,7 +190,7 @@ foreach ($cmd in $ast.FindAll({param($node) $node -is [System.Management.Automat
 $failure = $null
 try { for ($i=0; $i -lt $runs; $i++) { & ([scriptblock]::Create($handoff)) } } catch { $failure = $_.Exception.Message }
 '''
-            script = '$scenario=' + ps_string(scenario) + '\n$runs=' + ('2' if twice else '1') + '\n' + MOCKS
+            script = '$scenario=' + ps_string(scenario) + '\n$nativeKeyText=' + ps_string(native_output) + '\n$runs=' + ('2' if twice else '1') + '\n' + MOCKS
             script += '\n$handoff=' + ps_string(code) + '\n' + safety_check
             script += '\n[pscustomobject]@{calls=@($script:calls.ToArray());running=$script:running;mode=$script:mode;failure=$failure;rule=$script:rule;params=$script:ruleParams;messages=@($script:messages.ToArray());packets=@($script:packets.ToArray())} | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 -LiteralPath ' + ps_string(report)
             fixture.write_text(script, encoding='utf-8-sig')
@@ -222,12 +233,60 @@ try { for ($i=0; $i -lt $runs; $i++) { & ([scriptblock]::Create($handoff)) } } c
         self.assertEqual(r['calls'].count('install'), 1)
         self.assertLess(r['calls'].index('install'), r['calls'].index('configure'))
         self.assertEqual(r['calls'].count('get-capability'), 2)
+        self.assertEqual(r['packet']['checks']['server'], 'installed-now')
 
     def test_existing_service_does_not_reinstall(self):
         r = self.run_scenario('existing')
         self.assert_ready(r)
         self.assertNotIn('get-capability', r['calls'])
         self.assertNotIn('install', r['calls'])
+        self.assertEqual(r['packet']['checks']['server'], 'existing')
+        self.assertEqual(r['calls'].count('start'), 1)
+
+    def test_running_preinstalled_server_is_not_installed_or_restarted(self):
+        r = self.run_scenario('existing-running')
+        self.assert_ready(r)
+        for command in ('get-capability', 'install', 'start'):
+            self.assertNotIn(command, r['calls'])
+        self.assertEqual(r['packet']['checks']['server'], 'existing')
+
+    def test_reported_parenthesis_corruption_reproduces_failure(self):
+        correct = r'(SHA256:[A-Za-z0-9+/]+)\s+.*[(]([^)]+)[)]$'
+        broken = r'(SHA256:[A-Za-z0-9+/]+)\s+.*$([^)]+)$$'
+        self.assertIn(correct, documented_code())
+        r = self.run_scenario('existing', transform=lambda code: code.replace(correct, broken))
+        self.assert_not_ready(r)
+        self.assertEqual(r['packet']['failed_step'], '生成连接信息')
+        self.assertIn('指纹输出格式未识别', r['packet']['error'])
+
+    def test_literal_parenthesis_delimiter_conversion_no_longer_breaks_script(self):
+        r = self.run_scenario('existing', transform=lambda code: code.replace(r'\(', '$').replace(r'\)', '$'))
+        self.assert_ready(r)
+
+    def test_real_ssh_keygen_public_fingerprint_matches_packet(self):
+        keygen = shutil.which('ssh-keygen')
+        if not keygen:
+            self.skipTest('OpenSSH ssh-keygen is required')
+        # A synthetic public key blob; no host keys or private keys are read/generated.
+        algorithm = b'ssh-ed25519'
+        blob = len(algorithm).to_bytes(4, 'big') + algorithm + (32).to_bytes(4, 'big') + bytes(range(32))
+        expected = 'SHA256:' + base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip('=')
+        with tempfile.TemporaryDirectory(prefix='ssh-public-fixture-') as directory:
+            pub = Path(directory) / 'fixture.pub'
+            pub.write_text('ssh-ed25519 ' + base64.b64encode(blob).decode() + ' example user (fixture)\n', encoding='ascii')
+            result = subprocess.run([keygen, '-l', '-E', 'sha256', '-f', str(pub)], capture_output=True, timeout=15,
+                                    creationflags=subprocess.CREATE_NO_WINDOW)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            output = result.stdout.decode().strip()
+        r = self.run_scenario('native-output', native_output=output)
+        self.assert_ready(r)
+        self.assertEqual(r['packet']['host_keys'][0], {'algorithm':'ED25519', 'sha256':expected})
+
+    def test_keygen_failure_is_distinct_from_parsing_failure(self):
+        r = self.run_scenario('keygen-fails')
+        self.assert_not_ready(r)
+        self.assertIn('退出码：1', r['packet']['error'])
+        self.assertNotIn('格式未识别', r['packet']['error'])
 
     def test_install_error_stops_before_configuring(self):
         r = self.run_scenario('install-fails')

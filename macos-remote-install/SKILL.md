@@ -2,7 +2,7 @@
 name: macos-remote-install
 description: 从另一台 B 电脑远程协助 A 电脑安装或修复 OpenCore 与 macOS 双系统。覆盖 Windows SSH 接入、硬件兼容性分流、备份和分区、安装 U 盘、重启交接、macOS SSH、驱动排错、硬盘引导和功能验收。适合需要逐步进度反馈及回退记录的安装任务；不承诺所有硬件兼容，也不提供可直接套用的通用 EFI。
 metadata:
-  version: "0.1.4"
+  version: "0.1.5"
   language: zh-CN
   updated: "2026-10-30"
 ---
@@ -41,6 +41,10 @@ metadata:
 
 **B 先自动准备：** 读取 B 当前活动接口的 IPv4 与前缀，选择可用于连接 A 的候选地址，把下面 `$BIPv4 = @()` 填成仅包含已核实 IPv4 字符串的数组，其他代码不变。不能让用户手动查询 B 地址；工具不可用就保持空，结果明确为未知，后续由 B 验证。A 的前缀比较是网段线索，不是实际双向可达证明。
 
+**原样交付模板，不自由重写：** `scripts/enable-windows-ssh.ps1` 是维护和测试过的固定脚本。B 有 Python 时，从技能目录自动运行 `python scripts/prepare_ssh_handoff.py --b-ip B的实际IPv4 --out 私有任务目录/staging/ssh-setup.ps1`，读取生成文件并原样放入一个 PowerShell 代码块交给用户；多个 B 地址重复 `--b-ip`，未知则省略此参数。输出目录须已存在，输出文件名须未占用。这个助手只替换 IP 参数，不运行安装；不用用户执行助手或再确认一次。没有 Python 时用本地文本工具只替换这一行，并检查其余内容完全一致。不要凭记忆重打、重排转义或把代码改成数学公式格式；用户反馈复制后报错时，对比其实际收到的脚本，不只测试仓库原版。
+
+**按现场状态分流，不按 Windows 版本猜：** 已有可用 SSH 直接连接；配置脚本遇到已运行的 `sshd` 不重装、不重启，只设置自启并校验；已安装但未运行才启动；无服务且 Server 组件缺失才安装。只有 SSH 客户端不算已安装服务器。结果 `checks.server` 区分 `existing` 和 `installed-now`。
+
 对用户这样交接：先确认 A 使用的账户有非空密码（不是 Hello PIN）。在 **A 电脑**开始菜单搜索 **Windows PowerShell**，右键 **以管理员身份运行**，接受提示，将下面整块粘贴并按回车。说明这是安装和配置服务，会写入服务自启与一条 TCP 22 防火墙规则；不要在运行 Agent 的 B 上执行。设置账户密码仍由用户自己完成，不在代码里嵌入密码。
 
 <!-- windows-ssh-setup:start -->
@@ -68,7 +72,9 @@ metadata:
         if (-not $isAdmin) { throw '请在 A 电脑以管理员身份打开 Windows PowerShell，再粘贴整块代码。' }
 
         $step = '安装服务器'
+        $serverSource = 'existing'
         if (-not (Get-Service -Name sshd -ErrorAction SilentlyContinue)) {
+            $serverSource = 'installed-now'
             $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
             if ($cap.State -eq 'NotPresent') {
                 $setup = Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
@@ -86,7 +92,7 @@ metadata:
 
         $step = '启动并检查监听'
         Set-Service -Name sshd -StartupType Automatic
-        Start-Service -Name sshd
+        if ((Get-Service -Name sshd).Status -ne 'Running') { Start-Service -Name sshd }
         $listen = @()
         for ($attempt = 0; $attempt -lt 15; $attempt++) {
             $svc = Get-CimInstance -ClassName Win32_Service -Filter "Name='sshd'"
@@ -136,8 +142,11 @@ metadata:
         $fingerprints = @()
         foreach ($keyFile in @(Get-ChildItem -LiteralPath $keyDirectory -Filter 'ssh_host_*_key.pub' -File)) {
             $keyText = (& $keygen -l -E sha256 -f $keyFile.FullName | Out-String).Trim()
-            if ($LASTEXITCODE -ne 0 -or $keyText -notmatch '(SHA256:[A-Za-z0-9+/]+)\s+.*\(([^)]+)\)$') {
-                throw '主机公钥指纹读取失败。'
+            if ($LASTEXITCODE -ne 0) {
+                throw ('ssh-keygen 读取公钥失败，退出码：' + $LASTEXITCODE + '；文件：' + $keyFile.Name)
+            }
+            if ($keyText -notmatch '(SHA256:[A-Za-z0-9+/]+)\s+.*[(]([^)]+)[)]$') {
+                throw ('主机公钥指纹输出格式未识别：' + $keyText)
             }
             $fingerprints += [ordered]@{algorithm=$Matches[2];sha256=$Matches[1]}
         }
@@ -155,14 +164,15 @@ metadata:
         $report.port = 22
         $report.ipv4 = @($lan | ForEach-Object { [ordered]@{ip=$_.IPAddress;prefix=$_.PrefixLength;interface=$_.InterfaceAlias} })
         $report.host_keys = $fingerprints
-        $report.checks = [ordered]@{service='Running';startup='Auto';listener='sshd:22';firewall='LocalSubnet/AnyProfile'}
+        $report.checks = [ordered]@{server=$serverSource;service='Running';startup='Auto';listener='sshd:22';firewall='LocalSubnet/AnyProfile'}
         $report.network = [ordered]@{b_ipv4=@($BIPv4);same_subnet_from_a=$sameSubnet;matching_a=@($matching);connectivity='pending-b-test'}
     } catch {
         $report.failed_step = $step
         $report.error = $_.Exception.Message
     }
     if ($report.status -eq 'local-ready') {
-        Write-Host '进度：00 远程接入｜本机配置与检查完成。'
+        $serverLabel = if ($report.checks.server -eq 'existing') {'复用已有 SSH'} else {'已安装 SSH'}
+        Write-Host ('进度：00 远程接入｜' + $serverLabel + '，本机配置与检查完成。')
         Write-Host '下一步：B 自动核对指纹、连接 SSH 并采集硬件。'
         Write-Host '需要你：将下面整行结果发给 B；如尚未提供，再补充账户密码和目标 macOS 版本（未定也可以）。'
     } else {

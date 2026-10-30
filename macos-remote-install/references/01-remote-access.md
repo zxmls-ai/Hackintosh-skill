@@ -34,13 +34,16 @@
 | 结果 | 下一步 |
 |---|---|
 | 无 sshd，Server 状态 NotPresent | 脚本安装组件，重新检查状态，继续配置 |
-| 已存在 sshd 服务 | 直接配置自启与检查实际监听，不安装第二套 |
+| 已存在且运行的 sshd 服务（含系统预装） | 设置自启并检查监听与防火墙；不安装、不重启服务 |
+| 已存在但停止的 sshd 服务 | 设置自启并启动，再检查；不安装第二套 |
 | RestartNeeded=True | 当前配置未完成；记录后安排重启，再运行整块 |
 | Installed 但无服务／状态未知／安装报错 | 停止并读取错误，不反复 Start-Service |
 | 服务运行但只有其他端口、回环地址或 22 被其他进程占用 | 输出服务与端口信息；Agent 查实际配置、日志和占用，不覆盖用户已有 SSH 配置 |
 | 防火墙写入／读回失败 | 当前配置未通过，检查管理员权限、有效策略与错误，不关闭防火墙 |
 
 安装进度不是安装完成。遇到 0x800f0954、0x800f081f 等错误或长时间无进展，保留错误并检查 Windows Update／WSUS／FoD 来源，不承诺终端命令必定成功。按[微软故障说明](https://learn.microsoft.com/en-us/troubleshoot/windows-server/system-management-components/cant-install-openssh-features)选择匹配版本的源；组件途径不可用时，再评估微软维护的 [Win32-OpenSSH 发布包](https://github.com/PowerShell/Win32-OpenSSH/releases)，核对架构、版本及安装说明。不要混装、关闭组织策略或下载不明整合包。
+
+服务分流依据实际 `sshd` 与 Server 组件状态，不依据 Windows 名称或 `ssh.exe` 是否存在。B 按主入口用 `prepare_ssh_handoff.py` 填参数并交付固定脚本，不临时重写安装逻辑。若失败发生在“生成连接信息”，前面的服务和防火墙本机检查已通过；先核对实际交付代码与 `ssh-keygen` 退出码、公开输出，不让用户卸载重装。括号匹配使用 `[(]` / `[)]`，避免反斜杠括号被显示层按公式转义。
 
 ### 00-3 验证服务、监听与防火墙持久配置
 
