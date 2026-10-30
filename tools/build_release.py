@@ -13,7 +13,7 @@ SKILL = ROOT / "macos-remote-install"
 sys.path.insert(0, str(SKILL / "scripts"))
 from agentkit import no_link, sha
 
-VERSION = "0.1.3"
+VERSION = "0.1.4"
 REF_NAMES = ["01-remote-access", "02-hardware-routing", "03-storage", "04-installer",
              "05-boot-handoff", "06-postinstall", "07-troubleshooting", "08-state-and-tools",
              "case-14700k-4070ti-super", "sources"]
@@ -64,7 +64,7 @@ def workbuddy_skill():
     metadata = {"name": "macos-remote-install", "display_name": "AI 远程安装 OpenCore 与 macOS",
                 "display_name_en": "Remote OpenCore and macOS Installation",
                 "description": "从 B 电脑远程协助 A 电脑安装、排错和验收 macOS 双系统，先核对兼容性、备份与目标身份。",
-                "description_zh": "逐步进度、终端配置 Windows SSH、GUI 安装交接、远程检查与可回退修改。",
+                "description_zh": "一次回传连接信息、三项短交接、远程自动检查与可回退修改。",
                 "description_en": "Guide a separate target PC through compatibility checks, backup, installation and evidence-based validation.",
                 "version": VERSION, "author": "macos-remote-install contributors"}
     front = "---\n" + "\n".join(k + ": " + json.dumps(v, ensure_ascii=False) for k, v in metadata.items()) + "\n---\n\n"

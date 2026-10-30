@@ -4,7 +4,7 @@
 
 让运行在 **B 电脑**上的 Agent，通过远程连接协助 **A 电脑**安装、调试与验收 macOS，保留 Windows。面向小白，把能够自动完成的工作交给 Agent，Windows SSH 用一次粘贴的管理员 PowerShell 配置，其余现场操作优先 GUI。
 
-**v0.1.3：阶段 00 只用 PowerShell，自动配置 SSH 自启、TCP 22 防火墙规则并核验监听。** 提供通用决策流程与检查工具，没有一份适用于所有机器的 EFI。能够评估不同硬件，并在缺少支持时说明限制；不承诺所有电脑都能安装或所有功能完美。实际执行主路线为 x86-64 UEFI PC。
+**v0.1.4：阶段 00 一次配置、一次回传；每阶段只显示“进度／下一步／需要你”。** 提供通用决策流程与检查工具，没有一份适用于所有机器的 EFI。能够评估不同硬件，并在缺少支持时说明限制；不承诺所有电脑都能安装或所有功能完美。实际执行主路线为 x86-64 UEFI PC。
 
 ## 给 Agent 一个仓库链接
 
@@ -14,7 +14,7 @@
 仓库：https://github.com/zxmls-ai/Hackintosh-skill
 
 请先读取仓库 README.md，再读取 macos-remote-install/SKILL.md，按它协助我在另一台 A 电脑安装 OpenCore 与 macOS。你运行在 B 电脑。先检查你的工具能力，再引导我配置 A 的 Windows SSH，采集硬件并判断可行性。保留 Windows，实际版本与安装空间根据现场决定。
-能自动完成且已授权的操作请自动完成；清空 U 盘或分区前展示具体目标与备份验证结果。阶段 00 用完整 PowerShell 代码配置 SSH，其他人工步骤优先 GUI，每个阶段说明进度；重启前保存续接记录，遇到问题引导我拍照反馈。进入 macOS 后继续远程检查驱动、双系统启动与功能，不把未实测的项目报告为成功。
+能自动完成且已授权的操作请自动完成；清空 U 盘或分区前展示具体目标与备份验证结果。阶段 00 用完整 PowerShell 代码配置 SSH，其他人工步骤优先 GUI，每阶段只简短说明“进度／下一步／需要你”；合并能一次完成的操作，详细日志自行保存；重启前保存续接记录，遇到问题引导我拍照反馈。进入 macOS 后继续远程检查驱动、双系统启动与功能，不把未实测的项目报告为成功。
 ```
 
 只发一个链接时，一些 Agent 可能只做网页摘要，因此建议同时附上这段安装请求。普通聊天模型没有终端、SSH 或设备访问能力，读取 Skill 不能凭空获得这些能力。
@@ -28,7 +28,7 @@
 | [macos-remote-install/SKILL.md](macos-remote-install/SKILL.md) | 跨 Agent 的精简技能入口，按阶段加载资料 |
 | [AI-GUIDE.md](AI-GUIDE.md) | 从相同内容合成的单文件指南，适合直接附给 Agent |
 | [START-HERE.md](START-HERE.md) | 本地文件夹／WorkBuddy 使用方式 |
-| [WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.1.3.zip) | 需要本地技能导入时下载；新版流程待实机复测 |
+| [WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.1.4.zip) | 需要本地技能导入时下载；新版流程待实机复测 |
 | [references](macos-remote-install/references/) | SSH、兼容性、备份分区、EFI、安装、驱动、排错、续接 |
 | [scripts](macos-remote-install/scripts/) | SSH 服务与防火墙配置、只读采集、磁盘身份核对、文件校验、进度记录 |
 | [案例参考](macos-remote-install/references/case-14700k-4070ti-super.md) | 14700K＋4070 Ti SUPER 的脱敏经验及未解决问题 |
@@ -37,9 +37,9 @@
 
 阶段：接通 Windows SSH → 采集和兼容性判断 → 备份与空间规划 → EFI 与恢复 U 盘 → 用户协助启动安装 → 接通 macOS SSH → 驱动和功能检查 → 硬盘独立引导与交付。
 
-**开始前：** 默认使用 A 的 Windows 实际账户名与非空账户密码连接，Hello PIN 不能代替密码，不要求先配置公钥。Agent 直接展示 [SKILL 中完整的管理员 PowerShell 代码](macos-remote-install/SKILL.md)，取消 GUI 安装路线。脚本按需安装服务器、设置开机自启、启动服务、核验 TCP 22 的监听进程，并创建或修复持久防火墙规则。规则覆盖所有网络类型，新增放行范围为本地子网；跨网段由 Agent 按实际来源调整。本机检查后仍需由 B 验证 SSH 和 SFTP，详细见 [00 远程接入](macos-remote-install/references/01-remote-access.md)。
+**开始前：** 默认使用 A 的 Windows 实际账户名与非空账户密码连接，Hello PIN 不能代替密码，不要求先配置公钥。Agent 直接展示 [SKILL 中完整的管理员 PowerShell 代码](macos-remote-install/SKILL.md)，取消 GUI 安装路线。脚本按需安装服务器、设置开机自启、启动服务、核验 TCP 22 的监听进程，并创建或修复持久防火墙规则。规则覆盖所有网络类型，新增放行范围为本地子网；跨网段由 Agent 按实际来源调整。安装、校验、IP／用户名、主机指纹与网段比较合并输出一个连接结果。将结果交给 B，再补充账户密码与目标 macOS 版本（未定也可以）；B 自动核验握手、SSH、SFTP 并采集硬件。网段相同不等于可达，详细见 [00 远程接入](macos-remote-install/references/01-remote-access.md)。
 
-**正在测试旧版的用户：** 保留现有任务记录、已安装服务和可用连接。让 Agent 获取 v0.1.3 对应的仓库提交或重新导入新版 WorkBuddy 包，重新读取 SKILL 与远程接入参考，核对现场后续接；不要只刷新网页后假定本地旧 Skill 已更新，也不要为升级指南重装系统。固定并记录新提交号，其余阶段继续按该快照执行。
+**正在测试旧版的用户：** 保留现有任务记录、已安装服务和可用连接。让 Agent 获取 v0.1.4 对应的仓库提交或重新导入新版 WorkBuddy 包，重新读取 SKILL 与远程接入参考，核对现场后续接；不要只刷新网页后假定本地旧 Skill 已更新，也不要为升级指南重装系统。固定并记录新提交号，其余阶段继续按该快照执行。
 
 ## 自动化的边界
 

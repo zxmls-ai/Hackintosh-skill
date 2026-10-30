@@ -2,6 +2,8 @@
 
 ## 锁定版本与来源
 
+下载、EFI 组装、文件校验和已经授权的写盘连续执行，用户无需每下载一个组件回复“继续”。仅在需要插 U 盘、确认具体清空目标或准备重启时交接；默认三项短输出，详细版本与哈希留在日志。
+
 按硬件报告选择 macOS 和 OC 组合。在任务目录记录每项 URL、标签／提交、下载时间、SHA256、用途、适配范围和校验证据。优先官方稳定发布；实验构建注明原因。镜像站只解决传输问题，不能替代原作者来源核对。不把“最新”作为固定版本号，也不擅自升级安装中已锁定的组件。
 
 OpenCore 程序、OpenRuntime、Sample.plist、Configuration 文档和 ocvalidate 来自**同一个发布包**。恢复镜像从 Apple 服务获取，可使用该 OC 包中的 macrecovery；先看当前 `--help` 与文档再选 board-id／参数。不要凭记忆复制“latest”等于 Sequoia 的老命令。下载后验证实际镜像版本与对应 chunklist；镜像版本和最终联网安装的完整系统版本分别记录。[Windows 制作介质](https://dortania.github.io/OpenCore-Install-Guide/installer-guide/windows-install.html)

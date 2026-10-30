@@ -13,6 +13,7 @@ SHELL = shutil.which('powershell') or shutil.which('pwsh')
 MOCKS = r'''
 $script:calls = [System.Collections.Generic.List[string]]::new()
 $script:messages = [System.Collections.Generic.List[string]]::new()
+$script:packets = [System.Collections.Generic.List[string]]::new()
 $script:present = $scenario -notin @('new','install-fails','restart','unknown','installed-no-service','post-not-installed')
 $script:running = $false
 $script:mode = 'Manual'
@@ -63,7 +64,8 @@ function Get-CimInstance {
 }
 function Get-NetIPAddress {
     [CmdletBinding()] param($AddressFamily)
-    if ($scenario -ne 'no-ip') { [pscustomobject]@{IPAddress='198.51.100.20';AddressState='Preferred';InterfaceAlias='Ethernet'} }
+    if ($scenario -ne 'no-ip') { [pscustomobject]@{IPAddress='198.51.100.20';PrefixLength=$(if ($scenario -eq 'prefix-25') {25} elseif ($scenario -eq 'prefix-23') {23} else {24});AddressState='Preferred';InterfaceAlias='Ethernet'} }
+    if ($scenario -eq 'multi-nic') { [pscustomobject]@{IPAddress='203.0.113.20';PrefixLength=24;AddressState='Preferred';InterfaceAlias='Ethernet2'} }
     [pscustomobject]@{IPAddress='127.0.0.1';AddressState='Preferred';InterfaceAlias='Loopback'}
     [pscustomobject]@{IPAddress='169.254.1.2';AddressState='Preferred';InterfaceAlias='Disconnected'}
 }
@@ -109,6 +111,25 @@ function Get-NetFirewallProfile {
     [pscustomobject]@{Name='Public';Enabled='True';AllowInboundRules='True';AllowLocalFirewallRules='True'}
 }
 function whoami.exe { 'example-pc\testuser' }
+function Test-Path { [CmdletBinding()] param($LiteralPath) $scenario -ne 'no-keygen' }
+function Get-ChildItem {
+    [CmdletBinding()] param($LiteralPath,$Filter,[switch]$File)
+    if ($Filter -ne 'ssh_host_*_key.pub' -or -not $File) { throw 'Must only read public host keys' }
+    if ($scenario -ne 'no-host-keys') {
+        [pscustomobject]@{FullName='C:\fixture\ssh_host_ed25519_key.pub'}
+        [pscustomobject]@{FullName='C:\fixture\ssh_host_rsa_key.pub'}
+    }
+}
+function Invoke-MockKeygen {
+    param([switch]$l,$E,$f)
+    if (-not $l -or $E -ne 'sha256' -or $f -notlike '*.pub') { throw 'Unexpected keygen arguments' }
+    $global:LASTEXITCODE = 0
+    if ($scenario -eq 'keygen-fails') { $global:LASTEXITCODE=1; return 'Failure' }
+    if ($scenario -eq 'bad-fingerprint') { return '256 MD5:bad example (ED25519)' }
+    $algorithm = if ($f -like '*rsa*') {'RSA'} else {'ED25519'}
+    '256 SHA256:' + ('A' * 43) + ' example@fixture (' + $algorithm + ')'
+}
+function Write-Output { param($InputObject) $script:packets.Add([string]$InputObject) }
 '''
 
 
@@ -130,10 +151,14 @@ class HandoffSourceTests(unittest.TestCase):
 
 @unittest.skipUnless(os.name == 'nt' and SHELL, 'Windows PowerShell required for mocked handoff')
 class SSHHandoffTests(unittest.TestCase):
-    def run_scenario(self, scenario, twice=False):
+    def run_scenario(self, scenario, twice=False, b_ips=()):
         code = documented_code()
         # Only substitute the read-only token check; no test requires administrator access.
-        code, count = re.subn(r'(?m)^    \$isAdmin = .*$', '    $isAdmin = ' + ('$false' if scenario == 'not-admin' else '$true'), code)
+        code, count = re.subn(r'(?m)^\s*\$isAdmin = .*$', '        $isAdmin = ' + ('$false' if scenario == 'not-admin' else '$true'), code)
+        self.assertEqual(count, 1)
+        self.assertEqual(code.count('& $keygen '), 1)
+        code = code.replace('& $keygen ', 'Invoke-MockKeygen ')
+        code, count = re.subn(r'(?m)^    \$BIPv4 = .*$', '    $BIPv4 = @(' + ','.join(ps_string(ip) for ip in b_ips) + ')', code)
         self.assertEqual(count, 1)
         with tempfile.TemporaryDirectory(prefix='ssh-handoff-mock-') as directory:
             fixture = Path(directory) / 'fixture.ps1'
@@ -145,7 +170,8 @@ if ($parseErrors.Count) { throw 'Snippet syntax error' }
 $allowed = @('Get-Service','Get-WindowsCapability','Add-WindowsCapability','Set-Service','Start-Service',
 'Get-CimInstance','Get-NetIPAddress','Where-Object','Get-NetTCPConnection','Start-Sleep','Select-Object','Format-Table',
 'Get-NetFirewallRule','Set-NetFirewallRule','New-NetFirewallRule','Get-NetFirewallPortFilter','Get-NetFirewallAddressFilter',
-'Get-NetFirewallProfile','Out-Null','whoami.exe','Write-Host','Write-Warning')
+'Get-NetFirewallProfile','Out-Null','whoami.exe','Write-Host','Write-Warning','Out-String','Join-Path',
+'Test-Path','Get-ChildItem','Invoke-MockKeygen','Test-IPv4Subnet','ForEach-Object','Write-Output','ConvertTo-Json')
 foreach ($cmd in $ast.FindAll({param($node) $node -is [System.Management.Automation.Language.CommandAst]}, $true)) {
     $name = $cmd.GetCommandName()
     if ($name -and $name -notin $allowed) { throw ('Unmocked command: ' + $name) }
@@ -155,13 +181,20 @@ try { for ($i=0; $i -lt $runs; $i++) { & ([scriptblock]::Create($handoff)) } } c
 '''
             script = '$scenario=' + ps_string(scenario) + '\n$runs=' + ('2' if twice else '1') + '\n' + MOCKS
             script += '\n$handoff=' + ps_string(code) + '\n' + safety_check
-            script += '\n[pscustomobject]@{calls=@($script:calls.ToArray());running=$script:running;mode=$script:mode;failure=$failure;rule=$script:rule;params=$script:ruleParams;messages=@($script:messages.ToArray())} | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 -LiteralPath ' + ps_string(report)
+            script += '\n[pscustomobject]@{calls=@($script:calls.ToArray());running=$script:running;mode=$script:mode;failure=$failure;rule=$script:rule;params=$script:ruleParams;messages=@($script:messages.ToArray());packets=@($script:packets.ToArray())} | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 -LiteralPath ' + ps_string(report)
             fixture.write_text(script, encoding='utf-8-sig')
             result = subprocess.run([SHELL, '-NoProfile', '-NonInteractive', '-File', str(fixture)],
                                     capture_output=True, timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
             self.assertEqual(result.returncode, 0, result.stderr.decode(errors='replace'))
             self.assertTrue(report.exists(), result.stderr.decode(errors='replace'))
-            return json.loads(report.read_text(encoding='utf-8-sig'))
+            r = json.loads(report.read_text(encoding='utf-8-sig'))
+            self.assertIsNone(r['failure'], r['failure'])
+            self.assertEqual(len(r['packets']), 2 if twice else 1)
+            self.assertTrue(r['packets'][-1].startswith('SSH_HANDOFF_V1 '))
+            r['packet'] = json.loads(r['packets'][-1].split(' ', 1)[1])
+            self.assertEqual(r['packet']['schema'], 'ssh-handoff-v1')
+            self.assertEqual(r['packet']['stage'], '00')
+            return r
 
     def assert_ready(self, r):
         self.assertIsNone(r['failure'])
@@ -172,11 +205,16 @@ try { for ($i=0; $i -lt $runs; $i++) { & ([scriptblock]::Create($handoff)) } } c
         for key, value in dict(PolicyStore='PersistentStore',Protocol='TCP',LocalPort=22,RemoteAddress='LocalSubnet',Service='sshd').items():
             self.assertEqual(r['params'][key], value)
         self.assertIn('read-rule-ActiveStore', r['calls'])
-        self.assertTrue(any(m.startswith('[4/4]') for m in r['messages']))
+        self.assertEqual(r['packet']['status'], 'local-ready', r['packet'])
+        self.assertEqual(r['packet']['user'], 'example-pc\\testuser')
+        self.assertEqual(r['packet']['port'], 22)
+        self.assertEqual(len(r['packet']['host_keys']), 2)
+        self.assertEqual(r['packet']['network']['connectivity'], 'pending-b-test')
 
     def assert_not_ready(self, r):
-        self.assertIsNotNone(r['failure'])
-        self.assertFalse(any(m.startswith('[4/4]') for m in r['messages']))
+        self.assertEqual(r['packet']['status'], 'failed')
+        self.assertTrue(r['packet']['error'])
+        self.assertTrue(r['packet']['failed_step'])
 
     def test_missing_service_installs_configures_and_listens(self):
         r = self.run_scenario('new')
@@ -201,7 +239,7 @@ try { for ($i=0; $i -lt $runs; $i++) { & ([scriptblock]::Create($handoff)) } } c
         self.assertIsNone(r['failure'])
         self.assertFalse(r['running'])
         self.assertNotIn('configure', r['calls'])
-        self.assertFalse(any(m.startswith('[4/4]') for m in r['messages']))
+        self.assertEqual(r['packet']['status'], 'restart-required')
 
     def test_unknown_component_refuses_install(self):
         r = self.run_scenario('unknown')
@@ -286,6 +324,61 @@ try { for ($i=0; $i -lt $runs; $i++) { & ([scriptblock]::Create($handoff)) } } c
 
     def test_wrong_effective_port_is_not_success(self):
         self.assert_not_ready(self.run_scenario('wrong-effective-port'))
+
+    def test_handoff_has_addresses_prefixes_and_public_fingerprints(self):
+        r = self.run_scenario('existing', b_ips=['198.51.100.10'])
+        self.assert_ready(r)
+        p = r['packet']
+        self.assertEqual(p['ipv4'][0]['ip'], '198.51.100.20')
+        self.assertEqual(p['ipv4'][0]['prefix'], 24)
+        self.assertEqual({k['algorithm'] for k in p['host_keys']}, {'ED25519', 'RSA'})
+        self.assertNotIn('password', p)
+        self.assertNotIn('private_key', p)
+        self.assertEqual(len(r['messages']), 4)  # One waiting notice, then three handoff lines.
+
+    def test_known_same_subnet_still_needs_b_connectivity_test(self):
+        r = self.run_scenario('existing', b_ips=['198.51.100.10'])
+        self.assert_ready(r)
+        self.assertTrue(r['packet']['network']['same_subnet_from_a'])
+        self.assertEqual(r['packet']['network']['connectivity'], 'pending-b-test')
+
+    def test_unknown_b_is_not_assumed_on_same_lan(self):
+        r = self.run_scenario('existing')
+        self.assert_ready(r)
+        self.assertIsNone(r['packet']['network']['same_subnet_from_a'])
+
+    def test_matching_first_three_octets_not_sufficient_for_25(self):
+        r = self.run_scenario('prefix-25', b_ips=['198.51.100.200'])
+        self.assert_ready(r)
+        self.assertFalse(r['packet']['network']['same_subnet_from_a'])
+
+    def test_different_third_octet_can_match_23(self):
+        r = self.run_scenario('prefix-23', b_ips=['198.51.101.10'])
+        self.assert_ready(r)
+        self.assertTrue(r['packet']['network']['same_subnet_from_a'])
+
+    def test_multiple_nics_preserved_and_match_selected(self):
+        r = self.run_scenario('multi-nic', b_ips=['203.0.113.10'])
+        self.assert_ready(r)
+        self.assertEqual(len(r['packet']['ipv4']), 2)
+        self.assertEqual(r['packet']['network']['matching_a'], ['203.0.113.20'])
+
+    def test_other_subnet_not_reported_as_connected_or_setup_failure(self):
+        r = self.run_scenario('existing', b_ips=['203.0.113.10'])
+        self.assert_ready(r)
+        self.assertFalse(r['packet']['network']['same_subnet_from_a'])
+
+    def test_keygen_error_is_not_trusted_fingerprint(self):
+        self.assert_not_ready(self.run_scenario('keygen-fails'))
+
+    def test_missing_keygen_returns_one_error_packet(self):
+        self.assert_not_ready(self.run_scenario('no-keygen'))
+
+    def test_missing_host_keys_are_not_silently_ignored(self):
+        self.assert_not_ready(self.run_scenario('no-host-keys'))
+
+    def test_invalid_fingerprint_is_rejected(self):
+        self.assert_not_ready(self.run_scenario('bad-fingerprint'))
 
 
 if __name__ == '__main__':
