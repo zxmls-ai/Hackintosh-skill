@@ -156,6 +156,8 @@ def checkpoint(run, phase, status, summary, evidence):
     no_link(state_path)
     no_link(run / "journal.jsonl")
     state = read_json(state_path)
+    if state.get('controller') == 'workflow-v1':
+        raise ValueError('This run is managed by workflow.py; generic checkpoint cannot advance it')
     event = {"timestamp_utc": utc(), "phase": phase, "status": status, "summary": summary, "evidence": proofs}
     state.update(phase=phase, status=status, last_checkpoint=event)
     # Journal first: if interrupted before replacing state, the event remains recoverable.

@@ -13,14 +13,14 @@ SKILL = ROOT / "macos-remote-install"
 sys.path.insert(0, str(SKILL / "scripts"))
 from agentkit import no_link, sha
 
-VERSION = "0.1.5"
-REF_NAMES = ["01-remote-access", "02-hardware-routing", "03-storage", "04-installer",
+VERSION = "0.2.0"
+REF_NAMES = ["00-controller", "01-remote-access", "02-hardware-routing", "03-storage", "04-installer",
              "05-boot-handoff", "06-postinstall", "07-troubleshooting", "08-state-and-tools",
              "case-14700k-4070ti-super", "sources"]
 SOURCE_DOCS = [SKILL / "SKILL.md"] + [SKILL / "references" / (name + ".md") for name in REF_NAMES]
 TOP_FILES = ["README.md", "START-HERE.md", "AI-GUIDE.md", "LICENSE", ".gitignore",
              "CONTRIBUTING.md", "TEST-FEEDBACK.md", "VALIDATION.md", "PUBLISH.md", "CHANGELOG.md"]
-SCRIPTS = ["agentkit.py", "target_guard.py", "collect-windows.ps1", "collect-macos.sh", "enable-windows-ssh.ps1", "prepare_ssh_handoff.py"]
+SCRIPTS = ["agentkit.py", "target_guard.py", "collect-windows.ps1", "collect-macos.sh", "enable-windows-ssh.ps1", "prepare_ssh_handoff.py", "workflow.py", "ssh_transport.py", "probe-windows.ps1"]
 CODE = re.compile(r"(^```[^\n]*\n.*?^```[ \t]*$|`[^`\n]*`)", re.MULTILINE | re.DOTALL)
 
 
@@ -55,7 +55,12 @@ def make_guide():
             if "://" in link or link.startswith("#"):
                 return match.group(0)
             target = (p.parent / link.split("#", 1)[0]).resolve()
-            return f"[{label}](#{anchors[target]})" if target in anchors else match.group(0)
+            if target in anchors:
+                return f"[{label}](#{anchors[target]})"
+            if target.is_relative_to(ROOT):
+                fragment = '#' + link.split('#',1)[1] if '#' in link else ''
+                return f"[{label}]({target.relative_to(ROOT).as_posix()}{fragment})"
+            return match.group(0)
         pieces = CODE.split(t)
         t = ''.join(part if index % 2 else re.sub(r"\[([^\]\n]+)\]\(([^)\n]+)\)", rewrite, part)
                     for index, part in enumerate(pieces))
@@ -67,7 +72,7 @@ def workbuddy_skill():
     metadata = {"name": "macos-remote-install", "display_name": "AI 远程安装 OpenCore 与 macOS",
                 "display_name_en": "Remote OpenCore and macOS Installation",
                 "description": "从 B 电脑远程协助 A 电脑安装、排错和验收 macOS 双系统，先核对兼容性、备份与目标身份。",
-                "description_zh": "一次回传连接信息、三项短交接、远程自动检查与可回退修改。",
+                "description_zh": "固定流程与三项短交接；阶段 00 程序验收，异常处理后返回原步骤。",
                 "description_en": "Guide a separate target PC through compatibility checks, backup, installation and evidence-based validation.",
                 "version": VERSION, "author": "macos-remote-install contributors"}
     front = "---\n" + "\n".join(k + ": " + json.dumps(v, ensure_ascii=False) for k, v in metadata.items()) + "\n---\n\n"
@@ -79,8 +84,9 @@ def workbuddy_skill():
 def source_files():
     selected = [ROOT / name for name in TOP_FILES] + SOURCE_DOCS
     selected += [SKILL / "scripts" / name for name in SCRIPTS]
+    selected += [SKILL / "workflow.json"]
     selected += [SKILL / "LICENSE", ROOT / "tests" / "test_helpers.py", ROOT / "tests" / "test_collect_windows.py", ROOT / "tests" / "test_ssh_handoff.py", ROOT / "tests" / "test_prepare_ssh_handoff.py",
-                 ROOT / "tools" / "build_release.py", ROOT / ".github" / "ISSUE_TEMPLATE" / "installation-feedback.md"]
+                 ROOT / "tests" / "test_workflow.py", ROOT / "tools" / "build_release.py", ROOT / ".github" / "ISSUE_TEMPLATE" / "installation-feedback.md"]
     for p in selected:
         no_link(p)
         if not p.is_file(): raise ValueError(f"Missing public source file: {p.name}")

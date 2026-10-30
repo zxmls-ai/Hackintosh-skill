@@ -1,1 +1,1 @@
-7172b7906320a108d3249bffc51ae6c29d6258415ae90751ac6839c7b86c7127  macos-remote-install-workbuddy-v0.1.5.zip
+4716fee904f4a9022b97927ff013ccd975ee855cc978b8b35b0ce3ffe3f34f55  macos-remote-install-workbuddy-v0.2.0.zip
