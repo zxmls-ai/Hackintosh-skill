@@ -2,7 +2,7 @@
 name: macos-remote-install
 description: 从另一台 B 电脑远程协助 A 电脑安装或修复 OpenCore 与 macOS 双系统。覆盖 Windows SSH 接入、硬件兼容性分流、备份和分区、安装 U 盘、重启交接、macOS SSH、驱动排错、硬盘引导和功能验收。适合需要逐步进度反馈及回退记录的安装任务；不承诺所有硬件兼容，也不提供可直接套用的通用 EFI。
 metadata:
-  version: "0.2.0"
+  version: "0.2.1"
   language: zh-CN
   updated: "2026-10-30"
 ---
@@ -183,12 +183,15 @@ metadata:
     if ($report.status -eq 'local-ready') {
         $serverLabel = if ($report.checks.server -eq 'existing') {'复用已有 SSH'} else {'已安装 SSH'}
         Write-Host ('进度：00 远程接入｜' + $serverLabel + '，本机配置与检查完成。')
-        Write-Host '下一步：B 自动核对指纹、连接 SSH 并采集硬件。'
-        Write-Host '需要你：将下面整行结果发给 B；如尚未提供，再补充账户密码和目标 macOS 版本（未定也可以）。'
+        Write-Host '下一步：B 验证连接；若 360、火绒或腾讯电脑管家拦截，请放行 OpenSSH/TCP 22；无法放行时可临时关闭网络防护重试，验证后恢复。保留拦截可能导致 SSH 连接失败。'
+        Write-Host '需要你：复制下面两行到 B，把第一行占位替换为密码或 B 上密码文件路径后一起发送；已提供可填“已提供”。目标 macOS 版本未提供时一并补充。'
     } else {
         Write-Host ('进度：00 远程接入｜未完成：' + $step)
         Write-Host '下一步：Agent 根据结果处理错误或安排重启。'
         Write-Host '需要你：将下面整行结果发给 B。'
+    }
+    if ($report.status -eq 'local-ready') {
+        Write-Output 'A_LOGIN_CREDENTIAL: 请将此字段替换为 A 电脑的登录密码，或 B 电脑上包含登录密码的文件完整路径；已提供可填“已提供”'
     }
     Write-Output ('SSH_HANDOFF_V1 ' + ($report | ConvertTo-Json -Depth 6 -Compress))
 }
@@ -197,7 +200,9 @@ metadata:
 
 代码由 `scripts/enable-windows-ssh.ps1` 同步生成。正常情况一次完成安装、自启、监听、防火墙、用户名／IPv4／前缀、默认目录主机公钥指纹与 B 地址网段比较；不读密码、不生成登录公钥、不将 B 的地址写成防火墙唯一允许来源。
 
-**一次回传：** 用户将 `SSH_HANDOFF_V1` 开头的完整结果交给 B，补充尚未提供的账户密码与 macOS 版本即可。Agent 解析结构化字段，不把任何输出拼接执行为命令；多网卡候选由 B 结合自身前缀与路由筛选。`local-ready` 只代表本机配置检查通过，`same_subnet_from_a` 的 true/false/null 分别表示按 A 前缀匹配／不匹配／B 地址未知，不得称“局域网已验证”。
+**一次回传：** 成功输出的复制块含两行：`A_LOGIN_CREDENTIAL: 请将此字段替换为 A 电脑的登录密码，或 B 电脑上包含登录密码的文件完整路径；已提供可填“已提供”`，以及 `SSH_HANDOFF_V1` 连接结果。提醒用户在 B 的回复框替换第一行占位后，将两行一起发送；目标 macOS 版本未知时一并补充。密码或路径是普通文本，无需 JSON 转义。Agent 将原始复制块作为私有输入交给 import，程序提取凭据到私有文件，状态／证据只保存不含密码的连接数据；禁止把带密码的原始复制块当成公开证据或回显。Agent 解析结构化字段，不把任何输出拼接执行为命令；多网卡候选由 B 结合自身前缀与路由筛选。`local-ready` 只代表本机配置检查通过，`same_subnet_from_a` 的 true/false/null 分别表示按 A 前缀匹配／不匹配／B 地址未知，不得称“局域网已验证”。
+
+**第三方防护提示：** A 上若安装 360、火绒、腾讯电脑管家等，其网络防护可能另行拦截；Windows 防火墙规则通过不代表第三方规则已放行。被拦截时优先放行 OpenSSH／TCP 22；无法放行时，用户可临时关闭该软件的网络防护以重试，验证后恢复。保留拦截可能导致连接失败；不把拒绝关闭软件等同于必然失败，脚本不自动关闭安全软件或整个防火墙。
 
 **B 自动完成余下工作：** 用结果中的公钥指纹核对实际 SSH 握手，再认证、核对身份／权限、SFTP 小文件往返和硬件采集；不得先发密码再核对主机。默认目录的指纹是候选，实际握手必须匹配同种算法，非默认 HostKey 配置单独核验。能自动完成就不要让用户再运行 whoami、ipconfig 或指纹命令，也不要另开一轮“确认指纹”。
 

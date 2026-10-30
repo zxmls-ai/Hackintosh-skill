@@ -200,8 +200,9 @@ try { for ($i=0; $i -lt $runs; $i++) { & ([scriptblock]::Create($handoff)) } } c
             self.assertTrue(report.exists(), result.stderr.decode(errors='replace'))
             r = json.loads(report.read_text(encoding='utf-8-sig'))
             self.assertIsNone(r['failure'], r['failure'])
+            r['output_lines']=r['packets']
+            r['packets']=[line for line in r['output_lines'] if line.startswith('SSH_HANDOFF_V1 ')]
             self.assertEqual(len(r['packets']), 2 if twice else 1)
-            self.assertTrue(r['packets'][-1].startswith('SSH_HANDOFF_V1 '))
             r['packet'] = json.loads(r['packets'][-1].split(' ', 1)[1])
             self.assertEqual(r['packet']['schema'], 'ssh-handoff-v1')
             self.assertEqual(r['packet']['stage'], '00')
@@ -249,6 +250,15 @@ try { for ($i=0; $i -lt $runs; $i++) { & ([scriptblock]::Create($handoff)) } } c
         for command in ('get-capability', 'install', 'start'):
             self.assertNotIn(command, r['calls'])
         self.assertEqual(r['packet']['checks']['server'], 'existing')
+
+    def test_copy_block_includes_credential_placeholder_outside_json(self):
+        r=self.run_scenario('existing')
+        self.assert_ready(r)
+        self.assertEqual(len(r['output_lines']),2)
+        self.assertTrue(r['output_lines'][0].startswith('A_LOGIN_CREDENTIAL: '))
+        self.assertIn('请将此字段替换',r['output_lines'][0])
+        self.assertNotIn('credential',r['packet'])
+        self.assertTrue(any('临时关闭网络防护' in line and '验证后恢复' in line for line in r['messages']))
 
     def test_reported_parenthesis_corruption_reproduces_failure(self):
         correct = r'(SHA256:[A-Za-z0-9+/]+)\s+.*[(]([^)]+)[)]$'

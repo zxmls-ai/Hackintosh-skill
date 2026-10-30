@@ -31,7 +31,7 @@
 
 直接向用户展示 [SKILL 主入口](../SKILL.md) 的完整配置代码，并说明在 A 搜索 Windows PowerShell、右键以管理员身份运行、粘贴整块并回车。阶段 00 不再走可选功能／services.msc，也不把“GUI 优先”套用到这一步。代码源为 `scripts/enable-windows-ssh.ps1`；Windows PowerShell 5.1 的脚本文件使用 UTF-8 BOM。
 
-脚本合并执行安装检查、自动启动、监听、防火墙和连接信息采集；成功或失败均只交接三项短提示和一个 `SSH_HANDOFF_V1` 结果。实际改动仅限安装缺失的 OpenSSH Server、sshd 启动类型与启动操作、名为 `Hackintosh-Skill-SSH-In-TCP` 的专用入站规则。已安装服务不叠装，已有会话不主动重启，用户名／密码与 sshd_config 不自动修改。[微软服务安装与自启说明](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse)
+脚本合并执行安装检查、自动启动、监听、防火墙和连接信息采集；始终输出三项短提示和一个 `SSH_HANDOFF_V1` 结果；成功时在同一复制块前面增加 `A_LOGIN_CREDENTIAL` 密码／文件路径占位，提醒用户替换后一次发送。实际改动仅限安装缺失的 OpenSSH Server、sshd 启动类型与启动操作、名为 `Hackintosh-Skill-SSH-In-TCP` 的专用入站规则。已安装服务不叠装，已有会话不主动重启，用户名／密码与 sshd_config 不自动修改。[微软服务安装与自启说明](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse)
 
 | 结果 | 下一步 |
 |---|---|
@@ -71,7 +71,7 @@ ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no -l 实际账
 
 排错按证据区分：
 
-- 超时：检查地址、链路、端口和防火墙；连接拒绝：检查监听服务；认证失败：检查用户名、非空账户密码、账户限制和 sshd 配置。不把 AUTH_FAILED 简化为“基本是用了 PIN”，也不循环猜密码。
+- 超时：检查地址、链路、端口和防火墙；360、火绒、腾讯电脑管家等网络防护也可能拦截。优先放行 OpenSSH／TCP 22；无法放行时可由用户临时关闭该网络防护重试，验证后恢复。脚本不自动关闭软件；用户保留拦截可能导致失败，但拒绝关闭不等于必然失败。连接拒绝：检查监听服务；认证失败：检查用户名、非空账户密码、账户限制和 sshd 配置。不把 AUTH_FAILED 简化为“基本是用了 PIN”，也不循环猜密码。
 - `Permission denied (publickey)`：检查客户端是否禁止密码（例如 BatchMode）以及服务端实际配置，不直接宣称 Windows 必须用公钥。若服务端被设为仅公钥，按用户选择保留该策略或经授权备份后调整 `%ProgramData%\ssh\sshd_config`；检查全局与 Match 条件，修改后用实际 sshd 的 `-t` 校验再重启服务。
 - Agent 的终端不能输入密码：这是工具交互能力限制。先查可用连接器、SSH 库或用户指定的凭据机制；确实都不可用时说明限制，让用户选择人工指导或可选的密钥方案，不能称其为 Windows 要求。
 

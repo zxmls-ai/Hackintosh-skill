@@ -13,7 +13,7 @@ SKILL = ROOT / "macos-remote-install"
 sys.path.insert(0, str(SKILL / "scripts"))
 from agentkit import no_link, sha
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 REF_NAMES = ["00-controller", "01-remote-access", "02-hardware-routing", "03-storage", "04-installer",
              "05-boot-handoff", "06-postinstall", "07-troubleshooting", "08-state-and-tools",
              "case-14700k-4070ti-super", "sources"]
@@ -84,7 +84,7 @@ def workbuddy_skill():
 def source_files():
     selected = [ROOT / name for name in TOP_FILES] + SOURCE_DOCS
     selected += [SKILL / "scripts" / name for name in SCRIPTS]
-    selected += [SKILL / "workflow.json"]
+    selected += [SKILL / "workflow.json", SKILL / "upgrades.json"]
     selected += [SKILL / "LICENSE", ROOT / "tests" / "test_helpers.py", ROOT / "tests" / "test_collect_windows.py", ROOT / "tests" / "test_ssh_handoff.py", ROOT / "tests" / "test_prepare_ssh_handoff.py",
                  ROOT / "tests" / "test_workflow.py", ROOT / "tools" / "build_release.py", ROOT / ".github" / "ISSUE_TEMPLATE" / "installation-feedback.md"]
     for p in selected:

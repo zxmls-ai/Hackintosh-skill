@@ -11,6 +11,9 @@ import queue
 import threading
 import uuid
 
+CREDENTIAL_MARKER = 'A_LOGIN_CREDENTIAL: '
+CREDENTIAL_PLACEHOLDER = '请将此字段替换为 A 电脑的登录密码，或 B 电脑上包含登录密码的文件完整路径；已提供可填“已提供”'
+
 
 class Fault(Exception):
     def __init__(self, code, details=None):
@@ -73,10 +76,40 @@ def key_fingerprint(key):
 def read_secret(path):
     # The path, never its contents, may be passed in process arguments.
     try:
-        value = Path(path).read_text(encoding='utf-8-sig').rstrip('\r\n')
+        content = Path(path).read_bytes()
+        value = content.decode('utf-16' if content.startswith((b'\xff\xfe',b'\xfe\xff')) else 'utf-8-sig').rstrip('\r\n')
     except (OSError, UnicodeError):
         raise Fault('CREDENTIAL_INVALID') from None
+    if '\n' in value or '\r' in value:
+        matches = re.findall(r'^(?:密码|登录密码|Windows登录密码|password)[ \t]*[:：=][ \t]?(.*)$', value, re.MULTILINE | re.IGNORECASE)
+        if len(matches) != 1:
+            raise Fault('CREDENTIAL_INVALID')
+        value = matches[0].rstrip('\r')
     if not value or '\n' in value or '\r' in value or '\0' in value:
+        raise Fault('CREDENTIAL_INVALID')
+    return value
+
+
+def credential_from_bundle(text):
+    """Return a secret only to the caller's credential store, never to parsed packet/state."""
+    values = [line[len(CREDENTIAL_MARKER):] for line in text.lstrip('\ufeff').splitlines() if line.startswith(CREDENTIAL_MARKER)]
+    if not values:
+        return None  # Legacy packets remain usable with previously supplied credentials.
+    if len(values) != 1:
+        raise Fault('CREDENTIAL_INVALID')
+    value = values[0]
+    if not value or value == CREDENTIAL_PLACEHOLDER or value.strip('“”"') == '已提供':
+        return None
+    if value.startswith('密码='):
+        value = value[len('密码='):]
+    else:
+        candidate = value[1:-1] if len(value)>1 and value[0]==value[-1] and value[0] in ('"',"'") else value
+        is_file = candidate.startswith('文件=')
+        if is_file:
+            candidate = candidate[len('文件='):]
+        if is_file or Path(candidate).is_absolute() or re.match(r'^[A-Za-z]:[\\/]',candidate):
+            return read_secret(candidate)
+    if not value or '\0' in value:
         raise Fault('CREDENTIAL_INVALID')
     return value
 

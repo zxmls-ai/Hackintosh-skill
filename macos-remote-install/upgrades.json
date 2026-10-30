@@ -1,0 +1,20 @@
+{
+  "schema": "workflow-upgrades-v1",
+  "from": {
+    "0.2.0": {
+      "sources": {
+        "workflow.py": "5397917488300abfbf5dad8a8695f74e05c80e14d3de1a1ddd57bdaa56f1fa51",
+        "ssh_transport.py": "cba400657ab1e71718855b57e911cebe76f5ee849d43fe6fe4b4c1154878b39e",
+        "probe-windows.ps1": "94b14954f96674d821250f47bcd23f06f1c06b67adc7d28b7509f64ca4f6d75f",
+        "enable-windows-ssh.ps1": "b509d24ea8b7bf4d34330faf14fd0888eeaf09d943ce8d058449453a69a162f1",
+        "prepare_ssh_handoff.py": "c0501af412042320a883a22b45638221f3e7a527b351d93ef0e5369bc8d7071f",
+        "agentkit.py": "16186ae8ed3ed2efb0a967b850426588692dd28c218d4e2d28ed528812a02cdc",
+        "workflow.json": "00c2a976080ea2b9b0eb147be72291b7adf2464af0c53f2ed076490a00a62dcb"
+      },
+      "allowed_phases": [
+        "00-remote",
+        "01-hardware"
+      ]
+    }
+  }
+}

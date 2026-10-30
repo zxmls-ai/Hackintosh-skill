@@ -1,6 +1,6 @@
 # 给 WorkBuddy＋DeepSeek 的第一版安装工作流
 
-版本：0.2.0 · 2026-10-30。A 是待安装的电脑，B 是运行 Agent 的电脑。
+版本：0.2.1 · 2026-10-30。A 是待安装的电脑，B 是运行 Agent 的电脑。
 
 本版先读 `macos-remote-install/references/00-controller.md`，在 B 用 `workflow.py init/status` 进入固定流程。用户只看程序的三项 display 与必要代码；00 真实验证通过才推进，01～08 当前为合同审核模式。不要继续沿用旧版自由编写 SSH 连接器的做法。
 
@@ -14,7 +14,7 @@
 
 如果 A 已在 macOS，Agent 应先询问是「检查现有系统」还是「从 Windows 重新安装」，不会擅自重装。首次连接所需的地址、账号与授权范围会在工作流中收集；不必把密码公开写进这份文件。
 
-Windows 首次接入默认使用实际账户名与非空账户密码，PIN 不等于密码，公钥不是必需步骤。Agent 必须直接给出 [SKILL 主入口的完整管理员 PowerShell 代码](macos-remote-install/SKILL.md)，不再走 GUI 安装路线。一次粘贴完成按需安装、自启、服务启动、22 监听核验和局域网防火墙规则配置。结果包含连接所需的用户名、IP／前缀、指纹与网段比较。一次交给 B，补充密码与目标版本后由 Agent 连续完成握手核验、连接和硬件采集，不再逐项索取。配置完成不等于远程已接通。已有可用连接直接复用。
+Windows 首次接入默认使用实际账户名与非空账户密码，PIN 不等于密码，公钥不是必需步骤。Agent 必须直接给出 [SKILL 主入口的完整管理员 PowerShell 代码](macos-remote-install/SKILL.md)，不再走 GUI 安装路线。一次粘贴完成按需安装、自启、服务启动、22 监听核验和局域网防火墙规则配置。结果包含连接所需的用户名、IP／前缀、指纹与网段比较。复制结果块到 B，将第一行占位替换为密码或 B 上的密码文件完整路径，与连接信息一起发送；已提供可填“已提供”。目标版本未知时一并补充，再由 Agent 连续完成握手核验、连接和硬件采集，不再逐项索取。配置完成不等于远程已接通。已有可用连接直接复用。
 
 正在使用旧版时，保留任务目录；重新导入新版包或获取新版源码快照，让 Agent 重新读取 SKILL 与远程接入参考并记录新版本，再从现有阶段继续。不要覆盖任务记录或为更新 Skill 重装系统。
 
@@ -22,7 +22,7 @@ Windows 首次接入默认使用实际账户名与非空账户密码，PIN 不�
 
 - 标准技能：`macos-remote-install/SKILL.md`。供支持标准 Agent Skills 的客户端加载；安装目录按客户端当前文档，不猜测统一路径。
 - 单文件指南：`AI-GUIDE.md`。可以直接让 Agent 阅读；当只能上传一个文本文件时使用。配套检查脚本仍在完整包内，单文件不会假装它们存在。
-- 同时提供独立的 [WorkBuddy 适配 ZIP](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.0.zip)，补齐 WorkBuddy 开放平台文档的展示字段。若当前客户端提供本地技能导入，可选择它；不同版本导入入口可能不同。无法导入时直接用上述读取目录方式，不需要发布到市场。
+- 同时提供独立的 [WorkBuddy 适配 ZIP](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.1.zip)，补齐 WorkBuddy 开放平台文档的展示字段。若当前客户端提供本地技能导入，可选择它；不同版本导入入口可能不同。无法导入时直接用上述读取目录方式，不需要发布到市场。
 
 WorkBuddy 官方说明：[技能结构与字段](https://open.workbuddy.cn/docs/skill)。适配 ZIP 只改变入口展示字段，工作流、脚本和参考内容与通用版一致；用户已在 WorkBuddy＋DeepSeek 测到 00 阶段，新版修正仍待该环境复测。
 

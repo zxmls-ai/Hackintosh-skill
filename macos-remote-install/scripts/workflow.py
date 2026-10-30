@@ -14,11 +14,12 @@ import uuid
 
 from agentkit import confined, init_run, no_link, read_json, sha, utc
 from prepare_ssh_handoff import render, SOURCE
-from ssh_transport import Fault, parse_packet, verify_connection
+from ssh_transport import Fault, parse_packet, verify_connection, credential_from_bundle
 
-VERSION = '0.2.0'
+VERSION = '0.2.1'
 ROOT = Path(__file__).resolve().parent
 CONTRACT_PATH = ROOT.parent / 'workflow.json'
+UPGRADE_PATH = ROOT.parent / 'upgrades.json'
 CONTRACT = read_json(CONTRACT_PATH)
 PHASES = {p['id']:p for p in CONTRACT['phases']}
 TRACKED = ['workflow.py','ssh_transport.py','probe-windows.ps1','enable-windows-ssh.ps1','prepare_ssh_handoff.py','agentkit.py']
@@ -33,7 +34,7 @@ ERRORS = {
     'DEPENDENCY_INSTALL_FAILED': ('B 的 SSH 库安装未完成','核对 B 的 Python、网络与包源，保持原任务','暂时无需操作','diagnose'),
     'CREDENTIAL_REQUIRED': ('尚未取得登录凭据','使用已提供的凭据；未提供才询问一次','提供账户密码的取得方式；已有密钥可沿用','verify'),
     'CREDENTIAL_INVALID': ('凭据文件不可用','检查读取方式，不把 PIN 当作账户密码','仅在确实缺少时补充账户凭据','verify'),
-    'SSH_TIMEOUT': ('SSH 连接超时','核对回传地址、B 到 A 链路、监听和有效防火墙；不重装','检查仍无法完成时，在 A 运行整块检查并回传一次','verify'),
+    'SSH_TIMEOUT': ('SSH 连接超时','核对地址、链路、监听及防火墙；检查第三方安全软件是否拦截','如被拦截，放行 OpenSSH/TCP 22；无法放行时可临时关闭网络防护重试，验证后恢复','verify'),
     'SSH_REFUSED': ('A 拒绝 SSH 连接','核对实际监听与服务状态；已装服务不叠装','在 A 运行整块检查并回传一次','verify'),
     'SSH_UNREACHABLE': ('无法访问回传的 A 地址','核对地址与路由；只尝试回传候选，不扫描全网','必要时回传 A 的最新检查结果','verify'),
     'AUTH_FAILED': ('SSH 身份认证失败','核对真实用户名、密码类型与认证策略；停止重复密码尝试','核对一次账户凭据，不必改成公钥','verify'),
@@ -49,6 +50,7 @@ ERRORS = {
     'SFTP_CLEANUP_FAILED': ('测试文件清理未完成','核对并仅清理本次记录的临时测试文件','暂时无需操作','verify'),
     'RETRY_LIMIT': ('相同条件下验证已连续失败','收集新证据并形成诊断方案，禁止无限重试','仅补充当前诊断所需的一项反馈','diagnose'),
     'SOURCE_CHANGED': ('执行程序或流程规则已改变','保留任务记录，核对版本变更；不要静默换脚本','暂时无需操作','status'),
+    'UPGRADE_UNSUPPORTED': ('当前任务不满足已登记的升级条件','保留旧快照和记录；核对版本、阶段与是否仍在运行','暂时无需操作','status'),
     'RESUME_REQUIRED': ('有中断的操作需要恢复','核对现场后重跑当前步骤，不跳到下一阶段','无需操作','resume'),
     'STATE_INVALID': ('任务状态不完整','保留原文件，检查最后一条记录，不重新建同名任务','暂时无需操作','status'),
     'ACTION_NOT_ALLOWED': ('当前步骤不接受此操作','读取 status 的 next_action 并按顺序执行','无需操作','status'),
@@ -60,7 +62,7 @@ ERRORS = {
 
 
 def source_lock():
-    return {name:sha(ROOT / name)['sha256'] for name in TRACKED} | {'workflow.json':sha(CONTRACT_PATH)['sha256']}
+    return {name:sha(ROOT / name)['sha256'] for name in TRACKED} | {'workflow.json':sha(CONTRACT_PATH)['sha256'],'upgrades.json':sha(UPGRADE_PATH)['sha256']}
 
 
 def atomic_json(path, value):
@@ -176,6 +178,19 @@ def initialize(run):
         return state
 
 
+def upgrade(run,state):
+    current=source_lock()
+    if state.get('version')==VERSION and state['sources']==current:
+        return
+    profile=read_json(UPGRADE_PATH)['from'].get(state.get('version'))
+    if not profile or state['sources']!=profile['sources'] or state['phase'] not in profile['allowed_phases'] or state['status']=='running' or state.get('guided_reviews'):
+        raise Fault('UPGRADE_UNSUPPORTED')
+    backup=evidence(run,'before-workflow-upgrade',state)
+    state.update(version=VERSION,sources=current)
+    state.setdefault('upgrades',[]).append({'from':'0.2.0','to':VERSION,'backup':backup})
+    save(run,state,'upgrade-0.2.0-to-0.2.1')
+
+
 def local_ipv4():
     # Best effort without contacting A. Unknown is reported as unknown, never fabricated.
     addresses = []
@@ -222,14 +237,36 @@ def prepare(run, state, addresses=None):
 def import_handoff(run, state, packet_path):
     if state['phase'] != '00-remote' or state['status'] == 'running':
         raise Fault('ACTION_NOT_ALLOWED')
-    packet = parse_packet(Path(packet_path).read_text(encoding='utf-8-sig'))
+    text = Path(packet_path).read_text(encoding='utf-8-sig')
+    packet = parse_packet(text)
     if packet['status'] != 'local-ready':
         code = 'RESTART_REQUIRED' if packet['status'] == 'restart-required' else (
             'FINGERPRINT_READ_FAILED' if packet['failed_step'] == '生成连接信息' else 'SETUP_FAILED')
         raise Fault(code, {'failed_step':packet.get('failed_step')})
-    # Import stores only the allowlisted packet, never the user's surrounding chat.
+    # Preserve valid connection information even if only the credential/path needs correction.
     state.update(packet=packet, packet_proof=evidence(run, 'handoff', packet),
                  step='verify', status='planned', failure=None)
+    try:
+        secret = credential_from_bundle(text)
+    except Fault:
+        state['credential_import_error']=True
+        raise
+    if secret is not None:
+        private_dir=run/'private'
+        if private_dir.exists(): no_link(private_dir)
+        private_dir.mkdir(mode=0o700,exist_ok=True)
+        no_link(private_dir)
+        target=private_dir/'a-login-password'
+        if target.exists(): no_link(target)
+        fd, temporary=tempfile.mkstemp(prefix='.credential-',dir=private_dir)
+        try:
+            with os.fdopen(fd,'w',encoding='utf-8',newline='') as handle:
+                handle.write(secret)
+            os.replace(temporary,target)
+        finally:
+            if os.path.exists(temporary): os.unlink(temporary)
+        state['credential_import_error']=False
+    # State/evidence contain only the allowlisted packet, never the credential line.
     save(run, state, 'import')
 
 
@@ -238,6 +275,11 @@ def verify(run, state, credential_file=None, key_file=None, verifier=verify_conn
         raise Fault('ACTION_NOT_ALLOWED')
     if state['step'] == 'diagnose':
         raise Fault('RETRY_LIMIT')
+    if credential_file is None and key_file is None:
+        stored=run/'private'/'a-login-password'
+        if stored.is_file() and not state.get('credential_import_error'):
+            no_link(stored)
+            credential_file=stored
     verify_evidence(run, state['packet_proof'])
     signature = hashlib.sha256(json.dumps(state['packet'],sort_keys=True).encode()).hexdigest()
     # A changed packet or an evidence-backed repair starts a new bounded verification cycle.
@@ -409,16 +451,18 @@ def render_result(state, override=None):
             result.update(next_action='correct-input-then-import')
         elif code=='CONTRACT_REPORT_INVALID':
             result.update(next_action='correct-report-then-review',contract=contract)
+        elif code=='SOURCE_CHANGED':
+            result.update(next_action='upgrade')
     elif state['step'] == 'prepare':
         lines = ['进度：00 远程接入｜任务已建立','下一步：自动生成 A 端配置代码；已有连接结果可直接导入','需要你：暂时无需操作']
         result['next_action'] = 'prepare-or-import'
     elif state['step'] == 'import':
         lines = ['进度：00 远程接入｜A 端固定配置代码已准备','下一步：配置并采集 A 的连接信息',
-                 '需要你：确认有账户密码（不是 PIN）；在 A 的管理员 PowerShell 粘贴下方代码，回传整行结果。尚未提供时补充密码取得方式和目标 macOS 版本']
+                 '需要你：在 A 的管理员 PowerShell 运行下方代码；复制结果块到 B，替换密码／密码文件路径占位后一起发送。密码不是 PIN，已提供可填“已提供”']
         result.update(next_action='import',script=state['prepared'])
         if state.get('recovery_reason')=='RESTART_REQUIRED':
             lines=['进度：00 远程接入｜A 的 SSH 组件要求重启','下一步：重启后继续本机配置与检查',
-                   '需要你：保存工作并重启 A；在管理员 PowerShell 运行下方代码，回传整行结果']
+                   '需要你：保存工作并重启 A；运行下方代码，将密码占位与连接结果一起回传，已提供可填“已提供”']
     elif state['step'] == 'verify':
         lines = ['进度：00 远程接入｜连接信息已接收','下一步：自动验证 SSH、身份、权限和文件传输','需要你：已有凭据则无需操作；未提供时补充账户密码取得方式']
         result['next_action'] = 'verify'
@@ -444,7 +488,7 @@ def main():
     parser.add_argument('--run', required=True, type=Path)
     parser.add_argument('--json', action='store_true', help='Machine output including the exact display text')
     sub = parser.add_subparsers(dest='command',required=True)
-    for action in ('init','status','resume','recheck','recover'):
+    for action in ('init','status','resume','recheck','recover','upgrade'):
         sub.add_parser(action)
     p = sub.add_parser('prepare'); p.add_argument('--b-ip',action='append')
     p = sub.add_parser('import'); p.add_argument('--file',required=True,type=Path)
@@ -464,9 +508,10 @@ def main():
             state=initialize(run)
         else:
             with task_lock(run):
-                state=load(run)
+                state=load(run,check_sources=args.command!='upgrade')
                 try:
-                    if args.command=='prepare': prepare(run,state,args.b_ip)
+                    if args.command=='upgrade': upgrade(run,state)
+                    elif args.command=='prepare': prepare(run,state,args.b_ip)
                     elif args.command=='import': import_handoff(run,state,args.file)
                     elif args.command=='verify': verify(run,state,args.credential_file,args.key_file)
                     elif args.command=='resume': resume(run,state)

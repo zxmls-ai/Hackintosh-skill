@@ -29,7 +29,8 @@ python scripts/workflow.py --run "B上的私有任务目录" --json status
 |---|---|
 | prepare-or-import | 有完整、来源已核实的 A 端连接结果则 import；没有才 prepare |
 | import | 显示生成文件中的代码，等待用户一次回传；收到后保存结果并 import |
-| verify | 使用已提供的密码取得方式／密钥调用 verify，不额外配置公钥 |
+| verify | import 已提取密码时直接 verify；否则复用已有凭据参数，不额外询问或配置公钥 |
+| upgrade | 新版核对登记过的旧版源哈希，备份并迁移原任务，再 status；不手改 sources |
 | recover | 调用 recover 的固定规则；返回人工交接时才等待 |
 | correct-input-then-resume | 使用用户已补充的正确凭据；没有新信息时合并询问一次，随后 resume → verify，禁止猜密码 |
 | correct-input-then-import | 重新读取用户原始回传，必要时请其粘贴完整结果；不让用户重新安装 |
@@ -48,18 +49,20 @@ python scripts/workflow.py --run "任务目录" --json prepare
 
 程序尽力读取 B 的本机 IPv4，并通过本地绑定确认地址属于 B；无法取得时空数组表示未知。Agent 已用本机接口工具核对候选时，可重复传入 `--b-ip 实际地址`。不让用户查询 B 地址。网段比较仍只是线索，真实连通由 verify 验证。
 
-将返回的 `script.path` 相对任务目录解析，读文件并逐字放入一个 PowerShell 代码块。告诉用户在 **A 的管理员 Windows PowerShell** 中粘贴运行。先提醒账户有非空密码（不是 PIN），一次回传 `SSH_HANDOFF_V1`；尚未提供时同时补充密码取得方式和目标 macOS 版本。不能让用户运行 B 上的控制器。
+将返回的 `script.path` 相对任务目录解析，读文件并逐字放入一个 PowerShell 代码块。告诉用户在 **A 的管理员 Windows PowerShell** 中粘贴运行。先提醒账户有非空密码（不是 PIN），一次回传含 `A_LOGIN_CREDENTIAL` 和 `SSH_HANDOFF_V1` 的复制块；用户在 B 的回复框替换第一行密码／密码文件路径占位后一起发送，已提供可填“已提供”。目标版本尚未提供时一并补充。不能让用户运行 B 上的控制器。
 
 已有 SSH 只配置／校验，不重新安装；运行中的服务不重启。A 端脚本不保证睡眠或关机时仍然在线。
 
-收到结果后，由 Agent 保存包含这一条结果的文件，并调用：
+收到结果后，由 Agent 将两行一起保存到私有输入文件（不当作证据、不回显、不发布），并调用：
 
 ```text
 python scripts/workflow.py --run "任务目录" --json import --file "结果文件.txt"
-python scripts/workflow.py --run "任务目录" --json verify --credential-file "私有密码文件"
+python scripts/workflow.py --run "任务目录" --json verify
 ```
 
-默认账户取自 A 的回传，使用账户密码。密码文件只含密码，允许 UTF-8 BOM 和末尾换行，保留密码本身的空格；密码不放进命令行参数、交接结果、事件或公开包。已有安全文件直接复用；用户已在当前会话提供密码时由 Agent 写入受控私有文件，不再让用户手动创建第二份文件。只有尚未提供密码时才询问。已有可用的私钥可用 `--key-file` 替代，不能同时指定两种方式；加密私钥暂需现有客户端适配，不自动删除口令。
+默认账户取自 A 的回传。`A_LOGIN_CREDENTIAL: ` 后直接写密码或 B 上文件完整路径，不放进 JSON，不处理反斜杠／引号转义。路径可用双引号包住；密码形似路径时可写 `密码=实际密码`，显式路径可写 `文件=路径`。未替换占位或“已提供”不是密码，优先复用已有凭据，确实缺少才询问。import 自动把有效密码保存到任务的 `private/a-login-password`；verify 默认读取，不增加人工步骤。
+
+密码文件支持 UTF-8／UTF-16 BOM、末尾换行；单行只含密码，保留密码本身空格。已有多行账号文件可包含唯一的 `密码：`、`登录密码：`、`Windows登录密码：` 或 `password:` 行；多条或不明确时不猜测。B 上已经取得的其他凭据仍可用 `verify --credential-file 路径`。用户已在当前会话提供密码时由 Agent 写入私有文件，不让用户另建文件。带密码的原始输入也属于私有凭据：不要放进 evidence、state、事件、命令行参数或公开包。已有可用的私钥可用 `--key-file` 替代，不能同时指定两种方式；加密私钥暂需现有客户端适配，不自动删除口令。
 
 本版固定连接器使用 Paramiko。B 已具备时沿用；缺少会返回 `DEPENDENCY_MISSING`，`recover` 将已测试的 Paramiko 5.0.0 安装到本任务的 `runtime-deps`，不改全局 Python、不改 A。安装失败走诊断，不让用户盲目换认证方式。命令由 Agent 执行，用户不需要参与这些 B 端操作。
 
@@ -74,7 +77,7 @@ python scripts/workflow.py --run "任务目录" --json recover
 ```
 
 - `DEPENDENCY_MISSING`：只安装 B 的私有依赖，随后重跑 verify。
-- `SSH_TIMEOUT/SSH_REFUSED/SSH_UNREACHABLE`：不叠装、不换认证路线，重新生成固定的 A 端配置和检查块，一次回传当前 IP、服务、监听、防火墙与指纹；之前的地址可能已经变化。
+- `SSH_TIMEOUT/SSH_REFUSED/SSH_UNREACHABLE`：不叠装、不换认证路线，重新生成固定的 A 端配置和检查块，一次回传当前 IP、服务、监听、防火墙与指纹；之前的地址可能已经变化。若 A 装有 360、火绒、腾讯电脑管家等，检查其独立网络防护：优先放行 OpenSSH／TCP 22；无法放行时可由用户临时关闭网络防护重试，验证后恢复。不自动关闭安全软件；继续保留拦截可能导致连接失败。
 - `HOST_KEY_MISMATCH`：不发送密码；从 A 获取新结果，检查重装／地址变化。不要关闭验证。新结果也要通过身份检查。
 - `FINGERPRINT_READ_FAILED`：对比用户收到的代码与模板后交付固定代码；不卸载 SSH。仅有 `SETUP_FAILED` 时，原始错误仍由 Agent 从用户提供的私有文件检查，不能忽略组件来源或安装错误。
 - `RESTART_REQUIRED`：告知保存工作并重启 A，再运行配置块；不自动重启未获授权的电脑。
@@ -115,7 +118,12 @@ python scripts/workflow.py --run "任务目录" --json repair-result --file "处
 
 进度写在 `workflow-state.json`，事件在 `workflow-events.jsonl`；`state.json` 只是兼容投影。`agentkit checkpoint` 拒绝修改受控任务的阶段。程序锁防止两个进程同时推进，进程退出后锁自动释放。
 
-操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，升级需审查迁移方案，不能直接手改 sources 解锁。
+操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，不能直接手改 sources 解锁。v0.2.1 登记了 v0.2.0 的源哈希，00 或刚完成 00 且未提交后续审核的任务，可用新版的 `upgrade` 备份迁移；正在运行、未知版本或修改过的源哈希会拒绝。阶段、身份、连接信息、失败计数和证据保留，不重新安装 SSH。
+
+```text
+python scripts/workflow.py --run "原任务目录" --json upgrade
+python scripts/workflow.py --run "原任务目录" --json status
+```
 
 ```text
 python scripts/workflow.py --run "任务目录" --json resume

@@ -249,6 +249,64 @@ class WorkflowTests(unittest.TestCase):
                 self.assertTrue(phase[field])
             self.assertEqual(phase['next'],phases[i+1]['id'] if i+1<len(phases) else None)
 
+    def test_bundle_password_is_used_without_another_credential_argument(self):
+        secret='  SYNTHETIC-"quote"-\\-$(literal)-密码  '
+        text=ssh.CREDENTIAL_MARKER+secret+'\n'+packet()
+        flow.import_handoff(self.run,self.state,self.write('private-input.txt',text))
+        captured=[]
+        def verify(*args,**kwargs):
+            captured.append(ssh.read_secret(kwargs['credential_file']))
+            return good_result()
+        flow.verify(self.run,self.state,verifier=verify)
+        self.assertEqual(captured,[secret])
+        for path in [self.run/'workflow-state.json',self.run/'state.json',self.run/'workflow-events.jsonl',*(self.run/'evidence').glob('*.json')]:
+            self.assertNotIn('SYNTHETIC-',path.read_text(encoding='utf-8'))
+
+    def test_bundle_file_path_with_spaces_needs_no_json_escaping(self):
+        password_file=self.write('账号 信息.txt','用户名：admin\n密码：SYNTHETIC-FILE-PASSWORD\n')
+        text=ssh.CREDENTIAL_MARKER+'"'+str(password_file)+'"\n'+packet()
+        flow.import_handoff(self.run,self.state,self.write('input.txt',text))
+        self.assertEqual(ssh.read_secret(self.run/'private/a-login-password'),'SYNTHETIC-FILE-PASSWORD')
+
+    def test_placeholder_does_not_become_password_or_erase_existing_credential(self):
+        flow.import_handoff(self.run,self.state,self.write('initial.txt',ssh.CREDENTIAL_MARKER+'SYNTHETIC-EXISTING\n'+packet()))
+        for marker in (ssh.CREDENTIAL_PLACEHOLDER,'已提供'):
+            flow.import_handoff(self.run,self.state,self.write('later.txt',ssh.CREDENTIAL_MARKER+marker+'\n'+packet()))
+            self.assertEqual(ssh.read_secret(self.run/'private/a-login-password'),'SYNTHETIC-EXISTING')
+
+    def test_unfilled_placeholder_with_no_saved_password_is_not_authenticated(self):
+        flow.import_handoff(self.run,self.state,self.write('placeholder.txt',ssh.CREDENTIAL_MARKER+ssh.CREDENTIAL_PLACEHOLDER+'\n'+packet()))
+        self.assertFalse((self.run/'private/a-login-password').exists())
+
+    def test_missing_credential_file_preserves_connection_information(self):
+        text=ssh.CREDENTIAL_MARKER+str(self.run/'missing.txt')+'\n'+packet()
+        with self.assertRaises(ssh.Fault) as caught: flow.import_handoff(self.run,self.state,self.write('input.txt',text))
+        self.assertEqual(caught.exception.code,'CREDENTIAL_INVALID')
+        self.assertEqual(self.state['step'],'verify')
+        self.assertEqual(self.state['packet']['host'],'EXAMPLE-PC')
+
+    def test_known_020_upgrade_preserves_task_and_saves_backup(self):
+        self.import_good()
+        old=flow.read_json(flow.UPGRADE_PATH)['from']['0.2.0']
+        self.state.update(version='0.2.0',sources=old['sources'])
+        original_id=self.state['run_id']
+        flow.save(self.run,self.state,'synthetic-old-task')
+        with self.assertRaises(ssh.Fault): flow.load(self.run)
+        loaded=flow.load(self.run,check_sources=False)
+        flow.upgrade(self.run,loaded)
+        current=flow.load(self.run)
+        self.assertEqual(current['run_id'],original_id)
+        self.assertEqual(current['version'],'0.2.1')
+        self.assertEqual(current['step'],'verify')
+        flow.verify_evidence(self.run,current['upgrades'][0]['backup'])
+
+    def test_upgrade_rejects_unknown_source_and_running_operation(self):
+        profile=flow.read_json(flow.UPGRADE_PATH)['from']['0.2.0']
+        self.state.update(version='0.2.0',sources=profile['sources'],status='running')
+        with self.assertRaises(ssh.Fault): flow.upgrade(self.run,self.state)
+        self.state.update(status='planned',sources={'unknown':'hash'})
+        with self.assertRaises(ssh.Fault): flow.upgrade(self.run,self.state)
+
 
 class IdentityTests(unittest.TestCase):
     def probe(self,**changes):
@@ -272,6 +330,15 @@ class IdentityTests(unittest.TestCase):
     def test_invalid_packet_and_duplicate_packets_are_rejected(self):
         for text in (packet()+'\n'+packet(),packet(port='22'),packet(ipv4=[{'ip':'127.0.0.1'}]),packet(host_keys=[{'sha256':'SHA256:bad'}])):
             with self.subTest(text=text),self.assertRaises(ssh.Fault): ssh.parse_packet(text)
+
+    def test_explicit_password_prefix_preserves_password_that_looks_like_path(self):
+        self.assertEqual(ssh.credential_from_bundle('A_LOGIN_CREDENTIAL: 密码=C:\\literal'),'C:\\literal')
+
+    def test_multiple_password_fields_are_not_guessed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'account.txt'
+            path.write_text('用户名：x\n密码：one\npassword: two',encoding='utf-8')
+            with self.assertRaises(ssh.Fault): ssh.read_secret(path)
 
 
 if paramiko:

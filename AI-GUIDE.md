@@ -1,6 +1,6 @@
 # AI 远程协助安装 OpenCore 与 macOS：完整指南
 
-版本 0.2.0。此文件由 SKILL.md 与 references 合并生成。
+版本 0.2.1。此文件由 SKILL.md 与 references 合并生成。
 
 Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚本需取得完整仓库。没有工具时必须如实降级，不得编造执行结果。
 
@@ -198,12 +198,15 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
     if ($report.status -eq 'local-ready') {
         $serverLabel = if ($report.checks.server -eq 'existing') {'复用已有 SSH'} else {'已安装 SSH'}
         Write-Host ('进度：00 远程接入｜' + $serverLabel + '，本机配置与检查完成。')
-        Write-Host '下一步：B 自动核对指纹、连接 SSH 并采集硬件。'
-        Write-Host '需要你：将下面整行结果发给 B；如尚未提供，再补充账户密码和目标 macOS 版本（未定也可以）。'
+        Write-Host '下一步：B 验证连接；若 360、火绒或腾讯电脑管家拦截，请放行 OpenSSH/TCP 22；无法放行时可临时关闭网络防护重试，验证后恢复。保留拦截可能导致 SSH 连接失败。'
+        Write-Host '需要你：复制下面两行到 B，把第一行占位替换为密码或 B 上密码文件路径后一起发送；已提供可填“已提供”。目标 macOS 版本未提供时一并补充。'
     } else {
         Write-Host ('进度：00 远程接入｜未完成：' + $step)
         Write-Host '下一步：Agent 根据结果处理错误或安排重启。'
         Write-Host '需要你：将下面整行结果发给 B。'
+    }
+    if ($report.status -eq 'local-ready') {
+        Write-Output 'A_LOGIN_CREDENTIAL: 请将此字段替换为 A 电脑的登录密码，或 B 电脑上包含登录密码的文件完整路径；已提供可填“已提供”'
     }
     Write-Output ('SSH_HANDOFF_V1 ' + ($report | ConvertTo-Json -Depth 6 -Compress))
 }
@@ -212,7 +215,9 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
 
 代码由 `scripts/enable-windows-ssh.ps1` 同步生成。正常情况一次完成安装、自启、监听、防火墙、用户名／IPv4／前缀、默认目录主机公钥指纹与 B 地址网段比较；不读密码、不生成登录公钥、不将 B 的地址写成防火墙唯一允许来源。
 
-**一次回传：** 用户将 `SSH_HANDOFF_V1` 开头的完整结果交给 B，补充尚未提供的账户密码与 macOS 版本即可。Agent 解析结构化字段，不把任何输出拼接执行为命令；多网卡候选由 B 结合自身前缀与路由筛选。`local-ready` 只代表本机配置检查通过，`same_subnet_from_a` 的 true/false/null 分别表示按 A 前缀匹配／不匹配／B 地址未知，不得称“局域网已验证”。
+**一次回传：** 成功输出的复制块含两行：`A_LOGIN_CREDENTIAL: 请将此字段替换为 A 电脑的登录密码，或 B 电脑上包含登录密码的文件完整路径；已提供可填“已提供”`，以及 `SSH_HANDOFF_V1` 连接结果。提醒用户在 B 的回复框替换第一行占位后，将两行一起发送；目标 macOS 版本未知时一并补充。密码或路径是普通文本，无需 JSON 转义。Agent 将原始复制块作为私有输入交给 import，程序提取凭据到私有文件，状态／证据只保存不含密码的连接数据；禁止把带密码的原始复制块当成公开证据或回显。Agent 解析结构化字段，不把任何输出拼接执行为命令；多网卡候选由 B 结合自身前缀与路由筛选。`local-ready` 只代表本机配置检查通过，`same_subnet_from_a` 的 true/false/null 分别表示按 A 前缀匹配／不匹配／B 地址未知，不得称“局域网已验证”。
+
+**第三方防护提示：** A 上若安装 360、火绒、腾讯电脑管家等，其网络防护可能另行拦截；Windows 防火墙规则通过不代表第三方规则已放行。被拦截时优先放行 OpenSSH／TCP 22；无法放行时，用户可临时关闭该软件的网络防护以重试，验证后恢复。保留拦截可能导致连接失败；不把拒绝关闭软件等同于必然失败，脚本不自动关闭安全软件或整个防火墙。
 
 **B 自动完成余下工作：** 用结果中的公钥指纹核对实际 SSH 握手，再认证、核对身份／权限、SFTP 小文件往返和硬件采集；不得先发密码再核对主机。默认目录的指纹是候选，实际握手必须匹配同种算法，非默认 HostKey 配置单独核验。能自动完成就不要让用户再运行 whoami、ipconfig 或指纹命令，也不要另开一轮“确认指纹”。
 
@@ -300,7 +305,8 @@ python scripts/workflow.py --run "B上的私有任务目录" --json status
 |---|---|
 | prepare-or-import | 有完整、来源已核实的 A 端连接结果则 import；没有才 prepare |
 | import | 显示生成文件中的代码，等待用户一次回传；收到后保存结果并 import |
-| verify | 使用已提供的密码取得方式／密钥调用 verify，不额外配置公钥 |
+| verify | import 已提取密码时直接 verify；否则复用已有凭据参数，不额外询问或配置公钥 |
+| upgrade | 新版核对登记过的旧版源哈希，备份并迁移原任务，再 status；不手改 sources |
 | recover | 调用 recover 的固定规则；返回人工交接时才等待 |
 | correct-input-then-resume | 使用用户已补充的正确凭据；没有新信息时合并询问一次，随后 resume → verify，禁止猜密码 |
 | correct-input-then-import | 重新读取用户原始回传，必要时请其粘贴完整结果；不让用户重新安装 |
@@ -319,18 +325,20 @@ python scripts/workflow.py --run "任务目录" --json prepare
 
 程序尽力读取 B 的本机 IPv4，并通过本地绑定确认地址属于 B；无法取得时空数组表示未知。Agent 已用本机接口工具核对候选时，可重复传入 `--b-ip 实际地址`。不让用户查询 B 地址。网段比较仍只是线索，真实连通由 verify 验证。
 
-将返回的 `script.path` 相对任务目录解析，读文件并逐字放入一个 PowerShell 代码块。告诉用户在 **A 的管理员 Windows PowerShell** 中粘贴运行。先提醒账户有非空密码（不是 PIN），一次回传 `SSH_HANDOFF_V1`；尚未提供时同时补充密码取得方式和目标 macOS 版本。不能让用户运行 B 上的控制器。
+将返回的 `script.path` 相对任务目录解析，读文件并逐字放入一个 PowerShell 代码块。告诉用户在 **A 的管理员 Windows PowerShell** 中粘贴运行。先提醒账户有非空密码（不是 PIN），一次回传含 `A_LOGIN_CREDENTIAL` 和 `SSH_HANDOFF_V1` 的复制块；用户在 B 的回复框替换第一行密码／密码文件路径占位后一起发送，已提供可填“已提供”。目标版本尚未提供时一并补充。不能让用户运行 B 上的控制器。
 
 已有 SSH 只配置／校验，不重新安装；运行中的服务不重启。A 端脚本不保证睡眠或关机时仍然在线。
 
-收到结果后，由 Agent 保存包含这一条结果的文件，并调用：
+收到结果后，由 Agent 将两行一起保存到私有输入文件（不当作证据、不回显、不发布），并调用：
 
 ```text
 python scripts/workflow.py --run "任务目录" --json import --file "结果文件.txt"
-python scripts/workflow.py --run "任务目录" --json verify --credential-file "私有密码文件"
+python scripts/workflow.py --run "任务目录" --json verify
 ```
 
-默认账户取自 A 的回传，使用账户密码。密码文件只含密码，允许 UTF-8 BOM 和末尾换行，保留密码本身的空格；密码不放进命令行参数、交接结果、事件或公开包。已有安全文件直接复用；用户已在当前会话提供密码时由 Agent 写入受控私有文件，不再让用户手动创建第二份文件。只有尚未提供密码时才询问。已有可用的私钥可用 `--key-file` 替代，不能同时指定两种方式；加密私钥暂需现有客户端适配，不自动删除口令。
+默认账户取自 A 的回传。`A_LOGIN_CREDENTIAL: ` 后直接写密码或 B 上文件完整路径，不放进 JSON，不处理反斜杠／引号转义。路径可用双引号包住；密码形似路径时可写 `密码=实际密码`，显式路径可写 `文件=路径`。未替换占位或“已提供”不是密码，优先复用已有凭据，确实缺少才询问。import 自动把有效密码保存到任务的 `private/a-login-password`；verify 默认读取，不增加人工步骤。
+
+密码文件支持 UTF-8／UTF-16 BOM、末尾换行；单行只含密码，保留密码本身空格。已有多行账号文件可包含唯一的 `密码：`、`登录密码：`、`Windows登录密码：` 或 `password:` 行；多条或不明确时不猜测。B 上已经取得的其他凭据仍可用 `verify --credential-file 路径`。用户已在当前会话提供密码时由 Agent 写入私有文件，不让用户另建文件。带密码的原始输入也属于私有凭据：不要放进 evidence、state、事件、命令行参数或公开包。已有可用的私钥可用 `--key-file` 替代，不能同时指定两种方式；加密私钥暂需现有客户端适配，不自动删除口令。
 
 本版固定连接器使用 Paramiko。B 已具备时沿用；缺少会返回 `DEPENDENCY_MISSING`，`recover` 将已测试的 Paramiko 5.0.0 安装到本任务的 `runtime-deps`，不改全局 Python、不改 A。安装失败走诊断，不让用户盲目换认证方式。命令由 Agent 执行，用户不需要参与这些 B 端操作。
 
@@ -345,7 +353,7 @@ python scripts/workflow.py --run "任务目录" --json recover
 ```
 
 - `DEPENDENCY_MISSING`：只安装 B 的私有依赖，随后重跑 verify。
-- `SSH_TIMEOUT/SSH_REFUSED/SSH_UNREACHABLE`：不叠装、不换认证路线，重新生成固定的 A 端配置和检查块，一次回传当前 IP、服务、监听、防火墙与指纹；之前的地址可能已经变化。
+- `SSH_TIMEOUT/SSH_REFUSED/SSH_UNREACHABLE`：不叠装、不换认证路线，重新生成固定的 A 端配置和检查块，一次回传当前 IP、服务、监听、防火墙与指纹；之前的地址可能已经变化。若 A 装有 360、火绒、腾讯电脑管家等，检查其独立网络防护：优先放行 OpenSSH／TCP 22；无法放行时可由用户临时关闭网络防护重试，验证后恢复。不自动关闭安全软件；继续保留拦截可能导致连接失败。
 - `HOST_KEY_MISMATCH`：不发送密码；从 A 获取新结果，检查重装／地址变化。不要关闭验证。新结果也要通过身份检查。
 - `FINGERPRINT_READ_FAILED`：对比用户收到的代码与模板后交付固定代码；不卸载 SSH。仅有 `SETUP_FAILED` 时，原始错误仍由 Agent 从用户提供的私有文件检查，不能忽略组件来源或安装错误。
 - `RESTART_REQUIRED`：告知保存工作并重启 A，再运行配置块；不自动重启未获授权的电脑。
@@ -386,7 +394,12 @@ python scripts/workflow.py --run "任务目录" --json repair-result --file "处
 
 进度写在 `workflow-state.json`，事件在 `workflow-events.jsonl`；`state.json` 只是兼容投影。`agentkit checkpoint` 拒绝修改受控任务的阶段。程序锁防止两个进程同时推进，进程退出后锁自动释放。
 
-操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，升级需审查迁移方案，不能直接手改 sources 解锁。
+操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，不能直接手改 sources 解锁。v0.2.1 登记了 v0.2.0 的源哈希，00 或刚完成 00 且未提交后续审核的任务，可用新版的 `upgrade` 备份迁移；正在运行、未知版本或修改过的源哈希会拒绝。阶段、身份、连接信息、失败计数和证据保留，不重新安装 SSH。
+
+```text
+python scripts/workflow.py --run "原任务目录" --json upgrade
+python scripts/workflow.py --run "原任务目录" --json status
+```
 
 ```text
 python scripts/workflow.py --run "任务目录" --json resume
@@ -457,7 +470,7 @@ python scripts/workflow.py --run "任务目录" --json review --file "阶段检�
 
 直接向用户展示 [SKILL 主入口](#section-skill) 的完整配置代码，并说明在 A 搜索 Windows PowerShell、右键以管理员身份运行、粘贴整块并回车。阶段 00 不再走可选功能／services.msc，也不把“GUI 优先”套用到这一步。代码源为 `scripts/enable-windows-ssh.ps1`；Windows PowerShell 5.1 的脚本文件使用 UTF-8 BOM。
 
-脚本合并执行安装检查、自动启动、监听、防火墙和连接信息采集；成功或失败均只交接三项短提示和一个 `SSH_HANDOFF_V1` 结果。实际改动仅限安装缺失的 OpenSSH Server、sshd 启动类型与启动操作、名为 `Hackintosh-Skill-SSH-In-TCP` 的专用入站规则。已安装服务不叠装，已有会话不主动重启，用户名／密码与 sshd_config 不自动修改。[微软服务安装与自启说明](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse)
+脚本合并执行安装检查、自动启动、监听、防火墙和连接信息采集；始终输出三项短提示和一个 `SSH_HANDOFF_V1` 结果；成功时在同一复制块前面增加 `A_LOGIN_CREDENTIAL` 密码／文件路径占位，提醒用户替换后一次发送。实际改动仅限安装缺失的 OpenSSH Server、sshd 启动类型与启动操作、名为 `Hackintosh-Skill-SSH-In-TCP` 的专用入站规则。已安装服务不叠装，已有会话不主动重启，用户名／密码与 sshd_config 不自动修改。[微软服务安装与自启说明](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse)
 
 | 结果 | 下一步 |
 |---|---|
@@ -497,7 +510,7 @@ ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no -l 实际账
 
 排错按证据区分：
 
-- 超时：检查地址、链路、端口和防火墙；连接拒绝：检查监听服务；认证失败：检查用户名、非空账户密码、账户限制和 sshd 配置。不把 AUTH_FAILED 简化为“基本是用了 PIN”，也不循环猜密码。
+- 超时：检查地址、链路、端口和防火墙；360、火绒、腾讯电脑管家等网络防护也可能拦截。优先放行 OpenSSH／TCP 22；无法放行时可由用户临时关闭该网络防护重试，验证后恢复。脚本不自动关闭软件；用户保留拦截可能导致失败，但拒绝关闭不等于必然失败。连接拒绝：检查监听服务；认证失败：检查用户名、非空账户密码、账户限制和 sshd 配置。不把 AUTH_FAILED 简化为“基本是用了 PIN”，也不循环猜密码。
 - `Permission denied (publickey)`：检查客户端是否禁止密码（例如 BatchMode）以及服务端实际配置，不直接宣称 Windows 必须用公钥。若服务端被设为仅公钥，按用户选择保留该策略或经授权备份后调整 `%ProgramData%\ssh\sshd_config`；检查全局与 Match 条件，修改后用实际 sshd 的 `-t` 校验再重启服务。
 - Agent 的终端不能输入密码：这是工具交互能力限制。先查可用连接器、SSH 库或用户指定的凭据机制；确实都不可用时说明限制，让用户选择人工指导或可选的密钥方案，不能称其为 Windows 要求。
 
@@ -927,7 +940,7 @@ python scripts/agentkit.py check-efi --root <准备中的EFI目录>
 
 可以合并的同阶段查询、校验、下载和操作自动连续完成；不能合并尚未确认对象的清空动作。确认时只展示具体目标、容量、影响与备份状态，不用整张内部表淹没用户。重启交接只给本次按键／菜单、预期画面及异常时拍照回报方式；完整回退记录留在 NEXT.md。
 
-阶段 00 正常只需一次 A 端脚本与一次完整结果回传。B 从 `SSH_HANDOFF_V1` 解析数据并自动完成后续检查，不额外要求用户查询 IP、用户名和指纹。
+阶段 00 正常只需一次 A 端脚本与一次完整结果回传。成功回传复制块在 `SSH_HANDOFF_V1` 前加入 `A_LOGIN_CREDENTIAL` 占位，用户替换为密码或 B 上的文件路径，一次发送。B 将原文作为私有凭据输入，import 提取凭据到 private；状态／证据只保留清洗后的连接信息，再自动完成后续检查，不额外要求用户查询 IP、用户名和指纹。
 
 下载使用真实字节数；安装阶段使用实际日志活动。长任务安排可恢复的后台执行与输出位置，而不是固定等待后宣称完成。
 
