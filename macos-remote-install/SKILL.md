@@ -2,7 +2,7 @@
 name: macos-remote-install
 description: 从另一台 B 电脑远程协助 A 电脑安装或修复 OpenCore 与 macOS 双系统。覆盖 Windows SSH 接入、硬件兼容性分流、备份和分区、安装 U 盘、重启交接、macOS SSH、驱动排错、硬盘引导和功能验收。适合需要逐步进度反馈及回退记录的安装任务；不承诺所有硬件兼容，也不提供可直接套用的通用 EFI。
 metadata:
-  version: "0.2.4"
+  version: "0.2.5"
   language: zh-CN
   updated: "2026-10-30"
 ---
@@ -22,6 +22,8 @@ metadata:
 **阶段 03 的固定前置条件：** 默认复用有效本机 ACPI；缺少时由 Agent 在 A 准备 Python 与原作者工具，通过 SSH 在 Windows 中采集，不为了避免安装依赖而默认增加重启。只在用户选择“免 Python 方案”或默认路线经诊断仍不可用并得到用户选择时，用 OpenCore DEBUG 的 SysReport 采集。采集启动必须停在 OC 菜单后回 Windows，不交接“选择 macOS 恢复”。`review` 必须提交并通过实际 ACPI 表／配置／适配证据检查，详情见 [介质前置检查](references/04-installer.md)。阶段 03 未过不得安排安装启动；下载、已授权的介质准备和明确标注的诊断启动可在此前进行。
 
 用户只需一次 A 端配置与结果回传；已有完整可信结果直接导入，已有凭据直接使用。B 的 Python／工具不可用时明确标为“人工指导模式”，按下面参考执行，不伪造控制器输出。用户未要求切换模式时，不因为某个检查失败而绕过程序改用自由操作。
+
+**EFI 决策顺序：** 阶段 03 组装前和 04 首次启动失败后，必须读取 [EFI 固定决策与排错流程](references/09-efi-diagnostics.md)。先检查是否有同机、同阶段成功基线；没有时优先评估原作者工具，最后才按官方 Sample 与本机证据逐项构建。不得凭记忆从零编造参数。使用 `efi_audit.py` 检查配置启用状态、条件、版本依据和完整文件差异，部署后对实际回读再核对。每轮保存独立试验目录，区分事实、假设、组合对照与单项验证；校验通过不等于能启动，多项修改后有效不等于已找到某一根因。连续两轮无新证据，返回基线／部署／日志核对，不继续堆补丁。此顺序是 Agent 的执行要求，当前控制器不自动证明所有语义判断。
 
 ## 面向用户：三项短交接，合并人工操作
 
@@ -236,8 +238,8 @@ metadata:
 | 00 B 能力与 A 接入 | [01 远程接入](references/01-remote-access.md) | SSH 成功、主机身份与权限已核对；或明确进入人工指导模式 |
 | 01 硬件与可行性 | [02 硬件分流](references/02-hardware-routing.md) | 有硬件报告、目标系统、兼容性结论及安装网络方案 |
 | 02 备份与安装空间 | [03 存储](references/03-storage.md) | 确认备份范围与校验结果；磁盘／分区身份、容量方案明确 |
-| 03 EFI 与 U 盘 | [04 安装介质](references/04-installer.md) | 同版本 OC 校验、启用文件齐全、恢复镜像校验、U 盘内容回读 |
-| 04 引导与安装 | [05 交接](references/05-boot-handoff.md) | 用户实际进入桌面；安装过程异常已解决或有明确停止原因 |
+| 03 EFI 与 U 盘 | [04 安装介质](references/04-installer.md)、[09 EFI 决策](references/09-efi-diagnostics.md) | 本机 ACPI、来源与有效配置审查、同版本 OC 校验、恢复镜像校验、U 盘内容回读 |
+| 04 引导与安装 | [05 交接](references/05-boot-handoff.md)、失败时 [09 排错](references/09-efi-diagnostics.md) | 用户实际进入桌面；安装过程异常已解决或有明确停止原因 |
 | 05 macOS 远程接管 | [01 远程接入](references/01-remote-access.md) | macOS SSH、硬件与磁盘身份重新核对 |
 | 06 驱动与功能 | [06 完善与验收](references/06-postinstall.md) | 功能有实测状态；试验变更有备份和回退 |
 | 07 硬盘引导 | [06 完善与验收](references/06-postinstall.md) | 拔 U 盘后实际冷启动 macOS 与 Windows，而非只有文件复制成功 |

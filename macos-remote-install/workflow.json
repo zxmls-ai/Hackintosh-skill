@@ -1,6 +1,6 @@
 {
   "schema": "install-workflow-v1",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "phases": [
     {
       "id": "00-remote",
@@ -105,9 +105,11 @@
         "清空具体 U 盘已授权"
       ],
       "actions": [
+        "读取 09-efi-diagnostics，按适用同机基线、原作者工具、官方模板的顺序选择起点",
         "复用有效本机 ACPI；缺少时自动准备 Python 并在 A 的 Windows 中导出",
         "下载校验",
         "组装本机 EFI",
+        "运行 efi_audit.py 审计开关、条件、文件差异与版本依据，并纳入 firmware_config_review",
         "运行同版本 ocvalidate",
         "准备 U 盘",
         "写入并从 A 回读校验"
@@ -139,6 +141,20 @@
         },
         "gate": "real-table-files-plus-matching-config-and-assessment-required-before-install-handoff",
         "reference": "references/04-installer.md"
+      },
+      "efi_protocol": {
+        "reference": "references/09-efi-diagnostics.md",
+        "source_order": [
+          "applicable-same-machine-tested-baseline",
+          "supported-upstream-generator",
+          "documented-platform-sample"
+        ],
+        "audit": "scripts/efi_audit.py",
+        "runtime_verified_by_audit": false,
+        "review_evidence": [
+          "firmware_config_review",
+          "media_readback"
+        ]
       }
     },
     {
@@ -157,7 +173,8 @@
         "交付必要 BIOS 设置与启动菜单步骤",
         "确认恢复界面与网络",
         "重新核对安装目标",
-        "安装并按现场选择下一启动项"
+        "安装并按现场选择下一启动项",
+        "首次引导失败先执行 09 固定排错流程；两轮无新证据返回基线、部署与日志核对"
       ],
       "verification": [
         "recovery_boot",

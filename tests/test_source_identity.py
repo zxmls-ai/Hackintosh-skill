@@ -70,5 +70,14 @@ class SourceIdentityTests(unittest.TestCase):
         flow.upgrade(self.run,self.state)
         self.assertEqual(flow.load(self.run)['phase'],'04-install')
 
+    def test_024_upgrade_retains_phase_and_registers_auditor(self):
+        profile=flow.read_json(flow.UPGRADE_PATH)['from']['0.2.4']
+        self.state.update(version='0.2.4',sources=copy.deepcopy(profile['sources']),phase='04-install',step='guided-contract')
+        flow.upgrade(self.run,self.state)
+        current=flow.load(self.run)
+        self.assertEqual(current['phase'],'04-install')
+        self.assertEqual(current['version'],'0.2.5')
+        self.assertIn('efi_audit.py',current['sources'])
+
 
 if __name__=='__main__':unittest.main()

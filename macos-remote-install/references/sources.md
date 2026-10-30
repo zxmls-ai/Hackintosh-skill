@@ -19,6 +19,7 @@
 
 - [OpenCorePkg 原作者仓库与发布](https://github.com/acidanthera/OpenCorePkg)：同版本 Configuration 文档、Sample.plist、ocvalidate、macrecovery。
 - [OpenCore 官方文档入口](https://dortania.github.io/docs/)
+- [OpenCore 1.0.8 配置原文](https://github.com/acidanthera/OpenCorePkg/blob/1.0.8/Docs/Configuration.tex)：2026-10-30 复核配置开关、版本条件及 Custom SMBIOS 的实际含义；其他版本使用对应标签文档。
 - [OpenCore 安装指南](https://dortania.github.io/OpenCore-Install-Guide/)
 - [Windows 制作安装介质](https://dortania.github.io/OpenCore-Install-Guide/installer-guide/windows-install.html)
 - [安装阶段与重启](https://dortania.github.io/OpenCore-Install-Guide/installation/installation-process.html)
@@ -28,6 +29,8 @@
 
 ## 驱动与排错
 
+- [Dortania 内核启动问题分类](https://dortania.github.io/OpenCore-Install-Guide/troubleshooting/extended/kernel-issues.html)：按证据选择分支，不将最后一行当唯一根因。
+- [Dortania kext 适用条件](https://dortania.github.io/OpenCore-Install-Guide/ktext.html#extras)：2026-10-30 复核 AppleMCEReporterDisabler 的 AMD／双路 Intel 条件，不能扩成所有非 Xeon 必装。
 - [Acidanthera 项目](https://github.com/acidanthera)：在各项目仓库核对 Lilu、VirtualSMC、图形、音频等依赖及发布，不从未知整合包混装。
 - [NullMoth NVIDIA 驱动](https://github.com/nullmoth/nvidia-macos-driver)
 - [NVIDIA 支持与实测范围](https://github.com/nullmoth/nvidia-macos-driver/blob/main/docs/CARD-SUPPORT.md)

@@ -1,6 +1,6 @@
 # AI 远程协助安装 OpenCore 与 macOS：完整指南
 
-版本 0.2.4。此文件由 SKILL.md 与 references 合并生成。
+版本 0.2.5。此文件由 SKILL.md 与 references 合并生成。
 
 Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚本需取得完整仓库。没有工具时必须如实降级，不得编造执行结果。
 
@@ -16,6 +16,7 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
 - [06 驱动完善、硬盘引导与验收](#section-06-postinstall)
 - [07 按启动阶段和证据排错](#section-07-troubleshooting)
 - [08 状态、进度和配套工具](#section-08-state-and-tools)
+- [09 EFI 生成与排错的固定决策流程](#section-09-efi-diagnostics)
 - [案例：14700K＋4070 Ti SUPER](#section-case-14700k-4070ti-super)
 - [原始资料与更新入口](#section-sources)
 
@@ -37,6 +38,8 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
 **阶段 03 的固定前置条件：** 默认复用有效本机 ACPI；缺少时由 Agent 在 A 准备 Python 与原作者工具，通过 SSH 在 Windows 中采集，不为了避免安装依赖而默认增加重启。只在用户选择“免 Python 方案”或默认路线经诊断仍不可用并得到用户选择时，用 OpenCore DEBUG 的 SysReport 采集。采集启动必须停在 OC 菜单后回 Windows，不交接“选择 macOS 恢复”。`review` 必须提交并通过实际 ACPI 表／配置／适配证据检查，详情见 [介质前置检查](#section-04-installer)。阶段 03 未过不得安排安装启动；下载、已授权的介质准备和明确标注的诊断启动可在此前进行。
 
 用户只需一次 A 端配置与结果回传；已有完整可信结果直接导入，已有凭据直接使用。B 的 Python／工具不可用时明确标为“人工指导模式”，按下面参考执行，不伪造控制器输出。用户未要求切换模式时，不因为某个检查失败而绕过程序改用自由操作。
+
+**EFI 决策顺序：** 阶段 03 组装前和 04 首次启动失败后，必须读取 [EFI 固定决策与排错流程](#section-09-efi-diagnostics)。先检查是否有同机、同阶段成功基线；没有时优先评估原作者工具，最后才按官方 Sample 与本机证据逐项构建。不得凭记忆从零编造参数。使用 `efi_audit.py` 检查配置启用状态、条件、版本依据和完整文件差异，部署后对实际回读再核对。每轮保存独立试验目录，区分事实、假设、组合对照与单项验证；校验通过不等于能启动，多项修改后有效不等于已找到某一根因。连续两轮无新证据，返回基线／部署／日志核对，不继续堆补丁。此顺序是 Agent 的执行要求，当前控制器不自动证明所有语义判断。
 
 ## 面向用户：三项短交接，合并人工操作
 
@@ -251,8 +254,8 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
 | 00 B 能力与 A 接入 | [01 远程接入](#section-01-remote-access) | SSH 成功、主机身份与权限已核对；或明确进入人工指导模式 |
 | 01 硬件与可行性 | [02 硬件分流](#section-02-hardware-routing) | 有硬件报告、目标系统、兼容性结论及安装网络方案 |
 | 02 备份与安装空间 | [03 存储](#section-03-storage) | 确认备份范围与校验结果；磁盘／分区身份、容量方案明确 |
-| 03 EFI 与 U 盘 | [04 安装介质](#section-04-installer) | 同版本 OC 校验、启用文件齐全、恢复镜像校验、U 盘内容回读 |
-| 04 引导与安装 | [05 交接](#section-05-boot-handoff) | 用户实际进入桌面；安装过程异常已解决或有明确停止原因 |
+| 03 EFI 与 U 盘 | [04 安装介质](#section-04-installer)、[09 EFI 决策](#section-09-efi-diagnostics) | 本机 ACPI、来源与有效配置审查、同版本 OC 校验、恢复镜像校验、U 盘内容回读 |
+| 04 引导与安装 | [05 交接](#section-05-boot-handoff)、失败时 [09 排错](#section-09-efi-diagnostics) | 用户实际进入桌面；安装过程异常已解决或有明确停止原因 |
 | 05 macOS 远程接管 | [01 远程接入](#section-01-remote-access) | macOS SSH、硬件与磁盘身份重新核对 |
 | 06 驱动与功能 | [06 完善与验收](#section-06-postinstall) | 功能有实测状态；试验变更有备份和回退 |
 | 07 硬盘引导 | [06 完善与验收](#section-06-postinstall) | 拔 U 盘后实际冷启动 macOS 与 Windows，而非只有文件复制成功 |
@@ -763,7 +766,9 @@ SysReport 路线是**采集启动**：使用所选 OC 版本文档要求的 DEBU
 
 ## EFI 组装
 
-从目标版本 Sample.plist 和 X64 目录开始，按硬件分支建立自己的 EFI。RapidEFI、OC 配置器或其他自动工具可以辅助，但生成结果必须审查和校验，不能取代硬件判断。只有 UI 的工具不能假设存在 CLI；SSH 启动看不见的 GUI 不算生成成功。
+先读 [EFI 固定决策流程](#section-09-efi-diagnostics)。按“同机同阶段成功基线 → 有明确支持证据的原作者生成工具 → 官方 Sample.plist 与平台文档逐项构建”选择起点，并保存选择依据。不能在已有适用成功基线时无视它、默认从头设计；也不能将其他机器的 EFI 当作已验证基线。采用原版基线对照和添加 DEBUG／日志的诊断变体须分别记录。
+
+没有适用基线／工具时，从目标版本 Sample.plist 和 X64 目录开始，按硬件分支建立 EFI。RapidEFI、OC 配置器等生成结果同样须审查和校验；只有 UI 的工具不能假设存在 CLI，SSH 启动看不见的 GUI 不算生成成功。来源工具本身不决定 EFI 正确与否，实际采集、逐项核对和启动结果才提供证据。
 
 按需要加入文件：必要 ACPI、VirtualSMC、Lilu 及实际需要的插件、网络驱动、USB 映射等；遵循依赖顺序。不要为了“通用”加载所有网卡、全部显卡补丁和大量来源不明 SSDT。具体设置以原作者相应系统版本说明为准，未知参数先查证。
 
@@ -778,6 +783,8 @@ SMBIOS 选择与身份生成按本机路线完成。保留 Windows 时，BIOS �
 三者保存清晰文件清单与差异。禁止把运行期强依赖尚未安装驱动的配置提前放进首次启动介质。
 
 ## 校验
+
+按 [09 的固定命令](#section-09-efi-diagnostics) 生成 `efi_audit.py` 静态报告，记录启用／禁用／条件项及基线差异。不要仅凭目录中有 kext 判断它被启用，不从偶然二进制字符串猜 OC 版本。报告和审查说明加入 `firmware_config_review` 的证据。
 
 在 B 可运行 `python scripts/agentkit.py check-efi --root <EFI目录>` 做引用与路径检查，随后运行**同版本** ocvalidate。配套检查工具不是 ocvalidate 替代品，也不能证明能启动。核对启用的 ACPI、驱动、kext、Info.plist 与执行文件均存在；无版本冲突或重复注入；禁用项缺文件不应误报为启动失败。
 
@@ -922,6 +929,8 @@ NVIDIA 新驱动、Intel 无线、AMD 图形、Realtek 网卡等各自读取当�
 
 ## 最小排错循环
 
+EFI／引导问题先执行 [09 固定决策流程](#section-09-efi-diagnostics)：冻结失败现场 → 审计实际回读 → 核对适用成功基线 → 一个有证据的假设 → 明确范围的结果 → 回原步骤验收。连续两轮无新证据时回查输入条件，不继续增加补丁。详细记录留在私有目录，用户只看三项交接。
+
 保存现场→明确发生阶段→收集新证据→提出可证伪的假设→备份相关配置→一次只变更一个主要因素→同条件重测→确认效果或回退。因用户不得不中断测试而没有证据时记录“未知”，不是通过。
 
 为每次试验记录：时间、症状、目标设备、旧／新配置 SHA256、改动字段、来源、预期现象、实际结果、回退办法。相同条件下两次相同操作失败后不做第三次同样的破坏性重试；先改变诊断假设、获取日志或请用户补材料。
@@ -962,6 +971,8 @@ NVIDIA 新驱动、Intel 无线、AMD 图形、Realtek 网卡等各自读取当�
 <a id="section-08-state-and-tools"></a>
 
 # 08 状态、进度和配套工具
+
+EFI 审计使用 `scripts/efi_audit.py`，调用方式与每轮记录字段见 [09 固定决策流程](#section-09-efi-diagnostics)。构建、失败现场、回读和报告各用新的 attempt 目录；任何已登记证据及其引用文件保持原字节，不用新候选覆盖旧路径。证据被覆盖时只能恢复与登记哈希一致的旧副本，不能改哈希绕过 `EVIDENCE_CHANGED`；本版没有自动重建缺失历史证据的功能。
 
 v0.2 标准模式以 [流程控制器](#section-00-controller) 为唯一推进入口；先 `init/status`，按其结果调用动作。下列基础工具继续用于采集、清单与文件校验，不具有覆盖控制器阶段的权限。
 
@@ -1036,6 +1047,103 @@ python scripts/agentkit.py check-efi --root <准备中的EFI目录>
 
 
 
+<a id="section-09-efi-diagnostics"></a>
+
+# 09 EFI 生成与排错的固定决策流程
+
+阶段 03 组装 EFI 前，以及 04 首次引导失败后必须读取本篇。目标是缩小不确定性，不给所有机器指定同一组补丁。正常流程仍受控制器约束；本篇规定 Agent 的审查顺序，不是已经程序化验证所有硬件的承诺。
+
+## 1. 固定选择起点，不凭记忆从零拼装
+
+按下表从上到下选择第一条有证据成立的路线，写入私有记录。安装阶段、BIOS 版本／设置、原始 ACPI、目标系统、外设与 USB 插孔都是比较条件。
+
+| 条件 | 默认动作 | 必须保留的边界 |
+|---|---|---|
+| 同一台 A 有对应阶段的成功 EFI 与实测记录 | 优先保存并审计该完整基线，用作对照；先核对现场变化 | 成功进入桌面的 runtime EFI 不自动等于可启动恢复镜像的 install EFI；“同 CPU＋显卡”不等于同机 |
+| 没有适用成功基线，原作者维护的生成工具明确支持该硬件／系统 | 锁定工具版本与来源，提供真实采集信息，生成后按本篇审计 | RapidEFI 等工具是候选生成器，不是兼容性证明；看不见的 GUI、只有文件夹或进程退出不算生成成功 |
+| 没有适用工具，或输出审计不通过 | 使用锁定版本的官方 Sample.plist 与对应平台文档逐项适配 | 先列出硬件依据、参数来源、依赖与待验证项；禁止按常见名字编造 ACPI 路径或盲套案例 |
+
+通用工具选择不意味着每轮换一个生成器。保留初始输出和后续差异；一旦形成可启动组合，先冻结，再逐类完善。安装阶段的“最小集”是保留启动所需依赖，不是按文件数量删到最少。新配置不能因没有当代显卡加速就直接判定无法进入恢复界面，也不能因型号显示正常就判定加速完整；按原作者支持范围与实测分别判断。
+
+有成功基线时，第一轮失败后的优先动作是比较**实际失败介质与适用基线**，不是继续从通用模板猜参数。有证据表明基线已不适用（例如 BIOS／系统改变）则记录差异，按当前采集重新适配。
+
+## 2. 重启前自动完成的审计
+
+在 B 完成以下检查；只把确实需要现场操作的内容交给用户，合并到一次重启交接。
+
+1. **身份与来源：** 当前 A、目标安装阶段、OC 构建和组件来源明确。OC／OpenRuntime／校验器版本按可信发布包及哈希、实际启动标识核对；不从二进制任意 `1.0.0` 字符串推断版本。无法核实时写“未知”。
+2. **实际配置：** 审计 `config.plist` 的列表顺序、Enabled、Arch、MinKernel／MaxKernel、依赖与屏蔽项；再核对对应文件。区分“文件存在”“配置启用”“目标版本适用”“运行时已加载”“功能已验证”五种状态。禁用的 WhateverGreen、USBInjectAll、OpenCanopy 等不能写成已启用或根因。驱动在目录中也不决定菜单实际模式。
+3. **原始 ACPI：** 按 [04](#section-04-installer) 取得 A 的原始表。核对完整命名空间与条件分支；修改 `_STA`／`_INI` 前查是否已存在、调用时机与作用范围，避免重复定义。搜索不到一个字符串不等于设备不存在；编译通过、校验和通过、表数增加不等于方法有效执行。假 EC、AWAC／RTC、PLUG 等必须有本机依据。
+4. **设备路径与 USB：** 以采集的 PCI／ACPI 路径、USB 控制器及物理端口测试为依据。DSDT 中列出若干 HS 名称不能证明这些插孔全部可用；明确安装 U 盘、键鼠所用插孔在当前地图中。设备屏蔽要区分 ACPI 可见性、PCI 枚举、驱动匹配，不把一个 `_STA=0` 推成所有层面都已屏蔽。
+5. **固件与版本交互：** 按所用 OC 版本的官方文档核对相互依赖的设置、SMBIOS 策略、CPU 路线及 BIOS 状态。只有原作者支持范围／源码匹配与本机证据成立才添加补丁。不将 AppleMCEReporterDisabler、某一 Booter quirk、CustomSMBIOS、网卡屏蔽或 SIP／AMFI 设置升级为所有机器的默认修复。
+6. **分层验证：** 文件引用检查 → 同版本 ocvalidate → 本机适配审查 → A 上介质完整回读。四者是启动前检查；实际恢复启动、桌面启动、驱动加载、功能／睡眠各自另验。日志按 [04](#section-04-installer) 配置，原版基线和为记录日志增加的差异分开保存。
+
+若做“原样基线复现”，不要同时换 OC 构建、日志参数、镜像或补丁；原样 REL 基线与带 DEBUG 的诊断变体分别命名。既有 03 的诊断配置门槛仍适用，不能把不满足门槛的原样复制伪报为已验收安装介质；按控制器诊断流程记录对照目的与实际限制。
+
+## 3. 固定使用只读比较工具
+
+在技能目录执行；路径由 Agent 填写，结果保存在 B 的私有任务目录，用户不用执行。输入是 `EFI` 本身（包含 `OC/config.plist`），不是 U 盘根目录。每次先新建唯一 attempt 目录，输出文件不得已存在。
+
+```text
+python scripts/efi_audit.py --efi <本次EFI目录> --baseline <适用成功EFI目录> --oc-reference <可信同版本发布包的X64/EFI目录> --out <新attempt目录/efi-audit.json>
+```
+
+无基线时省略 `--baseline` 并在记录注明没有同机成功证据；无可信发布包时省略 `--oc-reference`，版本保持未核实，不用字符串猜测。工具不下载、不写 EFI、不联网、不判断能否启动；它列出配置开关、条件、文件差异、配置变化路径及核心文件是否与提供的发布包相同。条件项只标“需按目标判断”，不谎称已经运行时生效。发布包的真实性和版本仍需来源记录支持。
+
+部署后另读回 A 的 EFI 到新目录，并以本次构建作为 `--baseline` 再跑一次；要求文件清单一致，无漏拷、旧文件残留或哈希变化。对照报告不能只比较文件名、条目数量或 staging 副本。EFI 不变也要分别核对恢复镜像／chunklist、启动路径及现场条件。
+
+报告是静态审计，不自动证明审查合格；在 `firmware_config_review` 中附报告与人工／Agent 审查依据，在 `media_readback` 中附部署后的实际回读证据。工具报告留在私有目录，不直接上传公开 issue。
+
+## 4. 引导失败后的固定顺序
+
+1. **冻结这一轮。** 保存完整截图／视频、OC 日志原件、真实读回配置、使用的启动条目和现场反馈。日志有预分配尾部 NUL 时，在派生副本去掉尾部空字节读取；保留原件，不能按文件容量推断日志完整。
+2. **定位可确认的最远阶段。** 依据真实日志或界面记录 UEFI／boot.efi／内核／图形恢复界面；不知道后续是否运行就写未知。`EXITBS:START`、最后一行 `PCI`／ACM 或重复警告只能提示方向。异步日志换了顺序不证明初始化顺序前进；Caps Lock、ping 或单个端口不通不证明内核死锁。恢复环境未启用 SSH 时，22 不通尤其不能判死机；22 通也不能据此判定当前 OS。
+3. **查本轮是否真的测到了改动。** 核对实际启动盘、实际 config／AML／kext、开关和适用条件。检查已采集的错误栈、重复对象、缺文件、真实路径和依赖；优先修明确错误。没测到改动就记“试验无效”，不据此排除假设。
+4. **优先做适用基线对照。** 若尚未比较，回到第 1 节。多项差异的整个 EFI 替换属于“组合对照”；成功只说明这个组合在当时条件可用，不能挑其中一个 kext 称根因。失败也不能据此排除全部 EFI／BIOS／USB 交互。
+5. **一次验证一个假设。** 使用下面的固定记录。优先选有原作者文档／错误栈／实际配置差异支持的假设，预计结果必须可观察。确需成组变更（驱动及依赖）时列完整集合，承认不能隔离其中单项。调日志、换镜像／插孔／BIOS 也算变量。
+6. **按结果返回主流程。** 达到本轮预期，保存候选可用版本，再完成原阶段验收；症状无变化则回退本轮试验项；结果不足则补观察，不写“已排除”。同一停点连续两轮合理试验仍无新证据，暂停堆叠参数，回查基线、实际部署、日志与条件；必要时查原作者问题库或请求针对性现场资料。不要通过再格式化或重装来代替 EFI 排错。
+
+只有能隔离并复现的差异或直接错误证据，才可称已定位原因；其他结论使用“候选原因／待验证”。新信息出现时修正旧假设，不能为了维持此前结论持续加补丁。检查工具不能替代 Agent 的判断，但判断必须有可复核依据。
+
+## 5. 固定私有记录与三行交接
+
+每轮独立保存 `attempt.json`，至少包含：
+
+```json
+{
+  "schema": "efi-attempt-v1",
+  "attempt_id": "唯一编号",
+  "phase": "03-media 或 04-install",
+  "baseline": "来源、对应机器与阶段、成功证据；或 none",
+  "observations": ["本轮真正看到的现象与原始证据路径"],
+  "hypothesis": "尚待验证的解释",
+  "source": "原作者 URL、版本或提交、适用条件",
+  "changes": ["具体字段／文件、修改前后值或哈希"],
+  "test_kind": "single-hypothesis 或 bundle-comparison",
+  "conditions": ["BIOS、系统镜像、USB插孔、外设及冷启动等"],
+  "expected": "可观察的预期，不能只写应该会好",
+  "readback_evidence": "部署后回读证据路径",
+  "result": "pending / improved / unchanged / inconclusive / invalid-test",
+  "conclusion_scope": "本轮实际能支持的结论与不能支持的部分",
+  "rollback": "具体可恢复的前一版本",
+  "resume": "原控制器步骤"
+}
+```
+
+不得覆盖已登记到控制器的配置、manifest、报告或其引用文件；每次构建／回读／试验使用新目录并记录父版本。`EVIDENCE_CHANGED` 时停止推进，保存受影响状态与文件，核对是否误覆盖；只有找回**与原登记哈希逐字节一致**的旧副本才能恢复原证据。找不回则报告记录链不完整并进入维护处理，不能改旧哈希、标成功、删除检查或偷偷重建同名任务。本版未提供自动修复被覆盖历史证据的能力。
+
+给用户仍只交接三行，例如：
+
+```text
+进度：04 引导与安装｜本轮仍未进入恢复界面，配置已回读核对
+下一步：用同机安装基线做对照，暂不认定具体补丁是原因
+需要你：保存工作后按指定入口重启；若仍卡住，拍清整个界面
+```
+
+详细推理、失败假设与逐文件差异留在私有记录。不要向小白连续输出互相推翻的“已确定根因”，也不要让用户重复提供 Agent 已能读取的信息。
+
+
+
 <a id="section-case-14700k-4070ti-super"></a>
 
 # 案例：14700K＋4070 Ti SUPER
@@ -1067,6 +1175,23 @@ python scripts/agentkit.py check-efi --root <准备中的EFI目录>
 7. 迁移硬盘引导时，单纯复制 ESP 文件并不足够，还处理了启动项。之后曾发生 Machine Check；当时针对 NVMe-only 环境试验阻止 AppleAHCIPort，随后能进入系统。该关联不等于根因被彻底证明，带 SATA 设备的机器尤其不能套用此屏蔽。
 
 ## 明确未解决／未完成验证
+
+### 2026-10-30 重装测试：提炼流程规则，不指定通用参数
+
+同机的新流程曾使用手工生成的 EFI，多次停在早期启动；原始 ACPI 后来补齐，修正 ACPI、USB 与设备屏蔽后仍有失败反馈。随后取回历史安装阶段的完整 EFI 作为组合对照。维护方核对 B 上保存的 A 端回读清单，130 个文件与历史成功安装基线一致；**截至此次 v0.2.5 汇总，这个恢复基线试验尚无新的成功启动反馈**。
+
+本轮发现的可复核流程问题：
+
+- 从偶然二进制字符串把 OC 认成 1.0.0；核心三文件实际与保存的官方 1.0.8 RELEASE 包一致。应查版本来源和实际文件，不猜字符串。
+- 将目录中的 WhateverGreen、USBInjectAll、无线／蓝牙组件当作已启用；配置中这些项为禁用。OpenCanopy 也禁用且 PickerMode 为 Builtin，不能承诺会出现图形菜单。
+- 同时调整多项配置后仍失败，不能据此排除 RTC、USB、PCI 等整个问题类别。即使完整基线成功，也不能直接把其中一个 kext 判为根因。
+- 将 AppleMCEReporterDisabler 推为所有非 Xeon＋iMacPro1,1 必需项，没有匹配的错误栈或隔离试验支持。SMBIOS Custom 模式也必须按官方语义说明，不能简单描述为“保留原表，只改几个字段”。
+- 日志文件存在预分配尾部空字节；文件容量、画面最后一行变化、Caps Lock 或单端口响应均不足以证明内核阶段或当前 OS。
+- 固定路径反复覆盖已入账证据导致续接校验失败。新试验必须独立目录，原始证据不能跟着候选配置一起覆盖。
+
+这些发现已整理为 [通用 EFI 决策与排错协议](#section-09-efi-diagnostics)。它既不证明 AI 不能生成 EFI，也不证明自动生成器不会出错；要改进的是输入真实性、有效配置审计、对照设计和结论范围。
+
+### 既有安装的功能限制与早期重装观察
 
 2026-10-30 的新版流程实测补充（维护方只读核对）：恢复启动照片停在 EXITBS:START。U 盘实际使用 REL 构建，config 开启 SysReport，但盘上没有该报告；日志 Target=3、AppleDebug=false，未留下 OC 日志文件。只有一份 EC/USBX 补丁，不能把它视作本机 DSDT 已采集。与此前成功备份相比，SetupVirtualMap 由 true 变为 false，DummyPowerManagement 也由 true 变为 false；这些是对照线索，不是已证明的卡死根因或其他机器的推荐值。新流程须先采集原始表并配置日志、审查适配依据，再做一次一个变量的启动测试。本次未修改该电脑的 EFI 或安排验证启动。
 
@@ -1102,6 +1227,7 @@ python scripts/agentkit.py check-efi --root <准备中的EFI目录>
 
 - [OpenCorePkg 原作者仓库与发布](https://github.com/acidanthera/OpenCorePkg)：同版本 Configuration 文档、Sample.plist、ocvalidate、macrecovery。
 - [OpenCore 官方文档入口](https://dortania.github.io/docs/)
+- [OpenCore 1.0.8 配置原文](https://github.com/acidanthera/OpenCorePkg/blob/1.0.8/Docs/Configuration.tex)：2026-10-30 复核配置开关、版本条件及 Custom SMBIOS 的实际含义；其他版本使用对应标签文档。
 - [OpenCore 安装指南](https://dortania.github.io/OpenCore-Install-Guide/)
 - [Windows 制作安装介质](https://dortania.github.io/OpenCore-Install-Guide/installer-guide/windows-install.html)
 - [安装阶段与重启](https://dortania.github.io/OpenCore-Install-Guide/installation/installation-process.html)
@@ -1111,6 +1237,8 @@ python scripts/agentkit.py check-efi --root <准备中的EFI目录>
 
 ## 驱动与排错
 
+- [Dortania 内核启动问题分类](https://dortania.github.io/OpenCore-Install-Guide/troubleshooting/extended/kernel-issues.html)：按证据选择分支，不将最后一行当唯一根因。
+- [Dortania kext 适用条件](https://dortania.github.io/OpenCore-Install-Guide/ktext.html#extras)：2026-10-30 复核 AppleMCEReporterDisabler 的 AMD／双路 Intel 条件，不能扩成所有非 Xeon 必装。
 - [Acidanthera 项目](https://github.com/acidanthera)：在各项目仓库核对 Lilu、VirtualSMC、图形、音频等依赖及发布，不从未知整合包混装。
 - [NullMoth NVIDIA 驱动](https://github.com/nullmoth/nvidia-macos-driver)
 - [NVIDIA 支持与实测范围](https://github.com/nullmoth/nvidia-macos-driver/blob/main/docs/CARD-SUPPORT.md)

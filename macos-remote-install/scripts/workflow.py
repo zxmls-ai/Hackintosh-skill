@@ -17,13 +17,13 @@ from prepare_ssh_handoff import render, SOURCE
 from ssh_transport import Fault, parse_packet, verify_connection, credential_from_bundle
 from acpi_guard import check_acpi_evidence
 
-VERSION = '0.2.4'
+VERSION = '0.2.5'
 ROOT = Path(__file__).resolve().parent
 CONTRACT_PATH = ROOT.parent / 'workflow.json'
 UPGRADE_PATH = ROOT.parent / 'upgrades.json'
 CONTRACT = read_json(CONTRACT_PATH)
 PHASES = {p['id']:p for p in CONTRACT['phases']}
-TRACKED = ['workflow.py','ssh_transport.py','probe-windows.ps1','enable-windows-ssh.ps1','prepare_ssh_handoff.py','agentkit.py','acpi_guard.py']
+TRACKED = ['workflow.py','ssh_transport.py','probe-windows.ps1','enable-windows-ssh.ps1','prepare_ssh_handoff.py','agentkit.py','acpi_guard.py','efi_audit.py']
 
 # code -> summary, diagnostic action, human input, fixed resume action
 ERRORS = {
