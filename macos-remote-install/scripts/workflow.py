@@ -16,7 +16,7 @@ from agentkit import confined, init_run, no_link, read_json, sha, utc
 from prepare_ssh_handoff import render, SOURCE
 from ssh_transport import Fault, parse_packet, verify_connection, credential_from_bundle
 
-VERSION = '0.2.1'
+VERSION = '0.2.2'
 ROOT = Path(__file__).resolve().parent
 CONTRACT_PATH = ROOT.parent / 'workflow.json'
 UPGRADE_PATH = ROOT.parent / 'upgrades.json'
@@ -182,13 +182,14 @@ def upgrade(run,state):
     current=source_lock()
     if state.get('version')==VERSION and state['sources']==current:
         return
-    profile=read_json(UPGRADE_PATH)['from'].get(state.get('version'))
+    previous=state.get('version')
+    profile=read_json(UPGRADE_PATH)['from'].get(previous)
     if not profile or state['sources']!=profile['sources'] or state['phase'] not in profile['allowed_phases'] or state['status']=='running' or state.get('guided_reviews'):
         raise Fault('UPGRADE_UNSUPPORTED')
     backup=evidence(run,'before-workflow-upgrade',state)
     state.update(version=VERSION,sources=current)
-    state.setdefault('upgrades',[]).append({'from':'0.2.0','to':VERSION,'backup':backup})
-    save(run,state,'upgrade-0.2.0-to-0.2.1')
+    state.setdefault('upgrades',[]).append({'from':previous,'to':VERSION,'backup':backup})
+    save(run,state,f'upgrade-{previous}-to-{VERSION}')
 
 
 def local_ipv4():

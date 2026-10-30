@@ -52,12 +52,15 @@
 - `Set-Service -StartupType Automatic` 让服务随 Windows 启动；`Start-Service` 立即启动。不要手工运行 `sshd.exe -D` 或依靠终端后台作业替代 Windows 服务。关闭 PowerShell 不会结束正常的 sshd 服务。
 - 必须核对 22 的 `OwningProcess` 等于 sshd 服务进程，并且绑定通配地址或当前网卡 IPv4；不能仅看服务 Running 或任意进程占用了 22。旧服务若使用自定义端口，按实际意图适配监听与防火墙，不能强行抢占 22。
 - 脚本写入 `PersistentStore`，再从 `ActiveStore` 读取专用规则并检查方向、动作、端口与地址范围。规则使用 `Profile Any` 和 `RemoteAddress LocalSubnet`，支持公用／专用／域网络与同子网 DHCP 地址变化。原有其他规则不被改动，因此也不能声称整个系统只开放了本地子网。[防火墙规则参数](https://learn.microsoft.com/en-us/powershell/module/netsecurity/set-netfirewallrule)
+- 规则显式使用 `Service=Any`，并从 `ActiveStore` 读取服务过滤器确认；同时清除旧版规则的 `sshd` 绑定。服务 SID 为 `NONE` 时，指定服务的规则不能匹配，不能仅因规则存在而报告有效。保留 TCP 22／LocalSubnet／AnyProfile，不修改服务 SID、不重启服务来绕过。[微软服务规则限制](https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/configure)
 - 跨网段或 VPN 场景需要 Agent 将规则来源适配为 B 的实际地址／授权网段；本地子网规则不保证跨网段连接。显式阻止规则、组织禁止本地规则合并、第三方防火墙、AP 隔离等也可能阻止访问；不能把一条 Allow 规则读回成功当作链路可通。
 - 结果一次包含所有有效 IPv4／前缀、实际用户名和默认目录主机公钥的 SHA256 指纹，由 B 选择可达地址并验证。多网卡、169.254 自动地址、VPN 或默认路由异常先查现场；不要沿用旧 IP。服务自启不固定 IP，需要时可指导用户在路由器给对应网卡做 DHCP 地址保留。
 
 若用户报告“关闭窗口后就断了”，先区分是手工前台 sshd、服务崩溃，还是随后睡眠／断网／IP 变化，不让用户靠保持终端开启来维持连接。若运行中的服务确实反复退出，收集 OpenSSH Operational 和 System 服务控制管理器日志，修复具体原因后再评估服务恢复动作，不用无限重启掩盖错误。
 
 A 可以关闭 PowerShell，B 自动新建独立 SSH 会话。将重启后的自启测试合并到后续已安排的重启，不额外要求重启一次；未实测时如实记录未测。`Running/Auto` 不代表电脑睡眠或关机时也能响应。
+
+**超时判读：** `Get-NetFirewallProfile` 列出所有配置文件，Public 显示 Enabled 不等于当前网络一定为公用，更不能据此认定阻断；网络类别应另查 `Get-NetConnectionProfile`。安装了安全软件不证明它正在拦截，TCP 超时也不单独证明过滤来源。`localhost:22=True` 只证实本地连接可用。检查阻止规则时须考虑协议、端口数组／范围、程序／服务、地址和配置文件条件；只用 `22|Any` 正则未发现规则，不能排除拦截。先检查本包自己的有效规则，再按证据定位其他因素。
 
 ### 00-4 用密码完成真实连接
 

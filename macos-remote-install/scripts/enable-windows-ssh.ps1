@@ -62,10 +62,12 @@
         if ($lan.Count -eq 0) { throw '没有可用的网卡 IPv4，请先检查网线、Wi-Fi 或 DHCP，再重新执行。' }
         $step = '配置防火墙'
         $ruleName = 'Hackintosh-Skill-SSH-In-TCP'
+        # A service-specific rule cannot match when sshd has SERVICE_SID_TYPE_NONE.
+        # Explicit Any also clears the incompatible binding on rules from older releases.
         $ruleOptions = @{
             Name=$ruleName; PolicyStore='PersistentStore'; Enabled='True'
             Direction='Inbound'; Action='Allow'; Profile='Any'; Protocol='TCP'
-            LocalPort=22; RemoteAddress='LocalSubnet'; Service='sshd'
+            LocalPort=22; RemoteAddress='LocalSubnet'; Service='Any'
         }
         if (Get-NetFirewallRule -PolicyStore PersistentStore -Name $ruleName -ErrorAction SilentlyContinue) {
             Set-NetFirewallRule @ruleOptions
@@ -75,9 +77,11 @@
         $rule = Get-NetFirewallRule -PolicyStore ActiveStore -Name $ruleName
         $port = Get-NetFirewallPortFilter -AssociatedNetFirewallRule $rule
         $address = Get-NetFirewallAddressFilter -AssociatedNetFirewallRule $rule
+        $serviceFilter = Get-NetFirewallServiceFilter -AssociatedNetFirewallRule $rule
         if ($rule.Enabled -ne 'True' -or $rule.Direction -ne 'Inbound' -or $rule.Action -ne 'Allow' -or
             $rule.Profile -ne 'Any' -or $port.Protocol -notin @('TCP','6') -or
-            $port.LocalPort -ne '22' -or $address.RemoteAddress -notcontains 'LocalSubnet') {
+            $port.LocalPort -ne '22' -or $address.RemoteAddress -notcontains 'LocalSubnet' -or
+            $serviceFilter.Service -ne 'Any') {
             throw '防火墙规则核验未通过，请把输出发给 Agent；不要关闭整个防火墙。'
         }
 

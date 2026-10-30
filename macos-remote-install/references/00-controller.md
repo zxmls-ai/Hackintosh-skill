@@ -77,7 +77,7 @@ python scripts/workflow.py --run "任务目录" --json recover
 ```
 
 - `DEPENDENCY_MISSING`：只安装 B 的私有依赖，随后重跑 verify。
-- `SSH_TIMEOUT/SSH_REFUSED/SSH_UNREACHABLE`：不叠装、不换认证路线，重新生成固定的 A 端配置和检查块，一次回传当前 IP、服务、监听、防火墙与指纹；之前的地址可能已经变化。若 A 装有 360、火绒、腾讯电脑管家等，检查其独立网络防护：优先放行 OpenSSH／TCP 22；无法放行时可由用户临时关闭网络防护重试，验证后恢复。不自动关闭安全软件；继续保留拦截可能导致连接失败。
+- `SSH_TIMEOUT/SSH_REFUSED/SSH_UNREACHABLE`：不叠装、不换认证路线，重新生成固定的 A 端配置和检查块，一次回传当前 IP、服务、监听、防火墙与指纹；之前的地址可能已经变化。旧版 ≤0.2.1 的规则可能仍绑定 `Service=sshd`，新版配置块会显式改为 `Any`，并从有效策略复核；不需要重装 SSH 或改变服务 SID。如果已在外部完成这项修复且当前步骤仍允许 verify，复用现有可信回传与凭据直接 verify，不再要求用户重跑旧代码；已进入 diagnose 时先登记新修复证据再验收。若 A 装有 360、火绒、腾讯电脑管家等，检查其独立网络防护：优先放行 OpenSSH／TCP 22；无法放行时可由用户临时关闭网络防护重试，验证后恢复。不自动关闭安全软件；继续保留拦截可能导致连接失败。
 - `HOST_KEY_MISMATCH`：不发送密码；从 A 获取新结果，检查重装／地址变化。不要关闭验证。新结果也要通过身份检查。
 - `FINGERPRINT_READ_FAILED`：对比用户收到的代码与模板后交付固定代码；不卸载 SSH。仅有 `SETUP_FAILED` 时，原始错误仍由 Agent 从用户提供的私有文件检查，不能忽略组件来源或安装错误。
 - `RESTART_REQUIRED`：告知保存工作并重启 A，再运行配置块；不自动重启未获授权的电脑。
@@ -118,7 +118,7 @@ python scripts/workflow.py --run "任务目录" --json repair-result --file "处
 
 进度写在 `workflow-state.json`，事件在 `workflow-events.jsonl`；`state.json` 只是兼容投影。`agentkit checkpoint` 拒绝修改受控任务的阶段。程序锁防止两个进程同时推进，进程退出后锁自动释放。
 
-操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，不能直接手改 sources 解锁。v0.2.1 登记了 v0.2.0 的源哈希，00 或刚完成 00 且未提交后续审核的任务，可用新版的 `upgrade` 备份迁移；正在运行、未知版本或修改过的源哈希会拒绝。阶段、身份、连接信息、失败计数和证据保留，不重新安装 SSH。
+操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，不能直接手改 sources 解锁。v0.2.2 登记了 v0.2.0／v0.2.1 的源哈希，00 或刚完成 00 且未提交后续审核的任务，可用新版的 `upgrade` 备份迁移；正在运行、未知版本或修改过的源哈希会拒绝。阶段、身份、连接信息、失败计数和证据保留，不重新安装 SSH。
 
 ```text
 python scripts/workflow.py --run "原任务目录" --json upgrade

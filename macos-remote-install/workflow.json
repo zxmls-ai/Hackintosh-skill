@@ -1,6 +1,6 @@
 {
   "schema": "install-workflow-v1",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "phases": [
     {"id":"00-remote","title":"远程接入","mode":"executable","inputs":["A 的连接结果或已核验的连接资料","账户凭据取得方式"],"preconditions":["B 能运行 Python 与 SSH 库","用户授权连接 A"],"actions":["按需生成固定配置脚本","解析回传","指纹核对后认证","核对 Windows 身份和管理员权限","临时文件 SFTP 往返校验"],"verification":["ssh","host_key","identity","admin","sftp"],"failure_route":"diagnose-00","resume":"00-remote.verify","next":"01-hardware"},
     {"id":"01-hardware","title":"硬件与路线","mode":"guided-contract","inputs":["已接通的 A","用户的目标系统与用途"],"preconditions":["00 已通过并重新确认连接"],"actions":["运行固定硬件采集脚本","补齐 ACPI、USB、显示布线","查原作者兼容资料","确定硬件路线、系统版本与安装网络"],"verification":["target_identity","hardware_inventory","compatibility_sources","os_route","installer_network"],"failure_route":"diagnose-current","resume":"01-hardware.review","next":"02-storage"},

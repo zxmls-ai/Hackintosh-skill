@@ -1,6 +1,6 @@
 # 给 WorkBuddy＋DeepSeek 的第一版安装工作流
 
-版本：0.2.1 · 2026-10-30。A 是待安装的电脑，B 是运行 Agent 的电脑。
+版本：0.2.2 · 2026-10-30。A 是待安装的电脑，B 是运行 Agent 的电脑。
 
 本版先读 `macos-remote-install/references/00-controller.md`，在 B 用 `workflow.py init/status` 进入固定流程。用户只看程序的三项 display 与必要代码；00 真实验证通过才推进，01～08 当前为合同审核模式。不要继续沿用旧版自由编写 SSH 连接器的做法。
 
@@ -22,7 +22,7 @@ Windows 首次接入默认使用实际账户名与非空账户密码，PIN 不�
 
 - 标准技能：`macos-remote-install/SKILL.md`。供支持标准 Agent Skills 的客户端加载；安装目录按客户端当前文档，不猜测统一路径。
 - 单文件指南：`AI-GUIDE.md`。可以直接让 Agent 阅读；当只能上传一个文本文件时使用。配套检查脚本仍在完整包内，单文件不会假装它们存在。
-- 同时提供独立的 [WorkBuddy 适配 ZIP](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.1.zip)，补齐 WorkBuddy 开放平台文档的展示字段。若当前客户端提供本地技能导入，可选择它；不同版本导入入口可能不同。无法导入时直接用上述读取目录方式，不需要发布到市场。
+- 同时提供独立的 [WorkBuddy 适配 ZIP](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.2.zip)，补齐 WorkBuddy 开放平台文档的展示字段。若当前客户端提供本地技能导入，可选择它；不同版本导入入口可能不同。无法导入时直接用上述读取目录方式，不需要发布到市场。
 
 WorkBuddy 官方说明：[技能结构与字段](https://open.workbuddy.cn/docs/skill)。适配 ZIP 只改变入口展示字段，工作流、脚本和参考内容与通用版一致；用户已在 WorkBuddy＋DeepSeek 测到 00 阶段，新版修正仍待该环境复测。
 

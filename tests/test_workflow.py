@@ -296,7 +296,7 @@ class WorkflowTests(unittest.TestCase):
         flow.upgrade(self.run,loaded)
         current=flow.load(self.run)
         self.assertEqual(current['run_id'],original_id)
-        self.assertEqual(current['version'],'0.2.1')
+        self.assertEqual(current['version'],'0.2.2')
         self.assertEqual(current['step'],'verify')
         flow.verify_evidence(self.run,current['upgrades'][0]['backup'])
 
@@ -306,6 +306,21 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(ssh.Fault): flow.upgrade(self.run,self.state)
         self.state.update(status='planned',sources={'unknown':'hash'})
         with self.assertRaises(ssh.Fault): flow.upgrade(self.run,self.state)
+
+    def test_021_upgrade_preserves_failed_connection_and_attempt_count(self):
+        self.import_good()
+        profile=flow.read_json(flow.UPGRADE_PATH)['from']['0.2.1']
+        self.state.update(version='0.2.1',sources=profile['sources'],status='failed',attempt_count=1,
+                          failure={'code':'SSH_TIMEOUT','details':{},'resume':'verify'})
+        flow.save(self.run,self.state,'synthetic-021-failure')
+        loaded=flow.load(self.run,check_sources=False)
+        flow.upgrade(self.run,loaded)
+        current=flow.load(self.run)
+        self.assertEqual(current['upgrades'][-1]['from'],'0.2.1')
+        self.assertEqual(current['upgrades'][-1]['to'],'0.2.2')
+        self.assertEqual(current['attempt_count'],1)
+        self.assertEqual(current['packet'],self.state['packet'])
+        self.assertEqual(current['step'],'verify')
 
 
 class IdentityTests(unittest.TestCase):

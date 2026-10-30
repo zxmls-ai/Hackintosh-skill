@@ -22,9 +22,9 @@ $script:mode = 'Manual'
 $script:probes = 0
 $script:rule = $null
 $script:ruleParams = $null
-if ($scenario -in @('disabled-rule','wrong-port-rule')) {
+if ($scenario -in @('disabled-rule','wrong-port-rule','legacy-service-bound')) {
     $script:rule = [pscustomobject]@{Name='Hackintosh-Skill-SSH-In-TCP';Enabled='False';Profile='Private';Direction='Inbound';Action='Allow'}
-    $script:ruleParams = @{Protocol='TCP';LocalPort=2222;RemoteAddress='198.51.100.99'}
+    $script:ruleParams = @{Protocol='TCP';LocalPort=2222;RemoteAddress='198.51.100.99';Service='sshd'}
 }
 function Write-Host { param($Object) $script:messages.Add([string]$Object) }
 function Write-Warning { param($Message) $script:messages.Add([string]$Message) }
@@ -108,6 +108,10 @@ function Get-NetFirewallAddressFilter {
     [CmdletBinding()] param($AssociatedNetFirewallRule)
     [pscustomobject]@{RemoteAddress=@($script:ruleParams.RemoteAddress)}
 }
+function Get-NetFirewallServiceFilter {
+    [CmdletBinding()] param($AssociatedNetFirewallRule)
+    [pscustomobject]@{Service=$(if ($scenario -eq 'wrong-effective-service') {'sshd'} else {$script:ruleParams.Service})}
+}
 function Get-NetFirewallProfile {
     [CmdletBinding()] param($PolicyStore)
     [pscustomobject]@{Name='Public';Enabled='True';AllowInboundRules='True';AllowLocalFirewallRules='True'}
@@ -180,7 +184,7 @@ $ast = [System.Management.Automation.Language.Parser]::ParseInput($handoff, [ref
 if ($parseErrors.Count) { throw 'Snippet syntax error' }
 $allowed = @('Get-Service','Get-WindowsCapability','Add-WindowsCapability','Set-Service','Start-Service',
 'Get-CimInstance','Get-NetIPAddress','Where-Object','Get-NetTCPConnection','Start-Sleep','Select-Object','Format-Table',
-'Get-NetFirewallRule','Set-NetFirewallRule','New-NetFirewallRule','Get-NetFirewallPortFilter','Get-NetFirewallAddressFilter',
+'Get-NetFirewallRule','Set-NetFirewallRule','New-NetFirewallRule','Get-NetFirewallPortFilter','Get-NetFirewallAddressFilter','Get-NetFirewallServiceFilter',
 'Get-NetFirewallProfile','Out-Null','whoami.exe','Write-Host','Write-Warning','Out-String','Join-Path',
 'Test-Path','Get-ChildItem','Invoke-MockKeygen','Test-IPv4Subnet','ForEach-Object','Write-Output','ConvertTo-Json')
 foreach ($cmd in $ast.FindAll({param($node) $node -is [System.Management.Automation.Language.CommandAst]}, $true)) {
@@ -214,7 +218,7 @@ try { for ($i=0; $i -lt $runs; $i++) { & ([scriptblock]::Create($handoff)) } } c
         self.assertEqual(r['mode'], 'Auto')
         for key, value in dict(Enabled='True',Direction='Inbound',Action='Allow',Profile='Any').items():
             self.assertEqual(r['rule'][key], value)
-        for key, value in dict(PolicyStore='PersistentStore',Protocol='TCP',LocalPort=22,RemoteAddress='LocalSubnet',Service='sshd').items():
+        for key, value in dict(PolicyStore='PersistentStore',Protocol='TCP',LocalPort=22,RemoteAddress='LocalSubnet',Service='Any').items():
             self.assertEqual(r['params'][key], value)
         self.assertIn('read-rule-ActiveStore', r['calls'])
         self.assertEqual(r['packet']['status'], 'local-ready', r['packet'])
@@ -259,6 +263,17 @@ try { for ($i=0; $i -lt $runs; $i++) { & ([scriptblock]::Create($handoff)) } } c
         self.assertIn('请将此字段替换',r['output_lines'][0])
         self.assertNotIn('credential',r['packet'])
         self.assertTrue(any('临时关闭网络防护' in line and '验证后恢复' in line for line in r['messages']))
+
+    def test_old_service_binding_is_cleared_on_existing_rule(self):
+        result=self.run_scenario('legacy-service-bound')
+        self.assert_ready(result)
+        self.assertIn('set-rule',result['calls'])
+        self.assertNotIn('new-rule',result['calls'])
+
+    def test_incompatible_binding_in_effective_policy_is_not_reported_ready(self):
+        result=self.run_scenario('wrong-effective-service')
+        self.assert_not_ready(result)
+        self.assertEqual(result['packet']['failed_step'],'配置防火墙')
 
     def test_reported_parenthesis_corruption_reproduces_failure(self):
         correct = r'(SHA256:[A-Za-z0-9+/]+)\s+.*[(]([^)]+)[)]$'

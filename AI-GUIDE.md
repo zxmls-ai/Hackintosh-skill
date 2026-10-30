@@ -1,6 +1,6 @@
 # AI 远程协助安装 OpenCore 与 macOS：完整指南
 
-版本 0.2.1。此文件由 SKILL.md 与 references 合并生成。
+版本 0.2.2。此文件由 SKILL.md 与 references 合并生成。
 
 Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚本需取得完整仓库。没有工具时必须如实降级，不得编造执行结果。
 
@@ -138,10 +138,12 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
         if ($lan.Count -eq 0) { throw '没有可用的网卡 IPv4，请先检查网线、Wi-Fi 或 DHCP，再重新执行。' }
         $step = '配置防火墙'
         $ruleName = 'Hackintosh-Skill-SSH-In-TCP'
+        # A service-specific rule cannot match when sshd has SERVICE_SID_TYPE_NONE.
+        # Explicit Any also clears the incompatible binding on rules from older releases.
         $ruleOptions = @{
             Name=$ruleName; PolicyStore='PersistentStore'; Enabled='True'
             Direction='Inbound'; Action='Allow'; Profile='Any'; Protocol='TCP'
-            LocalPort=22; RemoteAddress='LocalSubnet'; Service='sshd'
+            LocalPort=22; RemoteAddress='LocalSubnet'; Service='Any'
         }
         if (Get-NetFirewallRule -PolicyStore PersistentStore -Name $ruleName -ErrorAction SilentlyContinue) {
             Set-NetFirewallRule @ruleOptions
@@ -151,9 +153,11 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
         $rule = Get-NetFirewallRule -PolicyStore ActiveStore -Name $ruleName
         $port = Get-NetFirewallPortFilter -AssociatedNetFirewallRule $rule
         $address = Get-NetFirewallAddressFilter -AssociatedNetFirewallRule $rule
+        $serviceFilter = Get-NetFirewallServiceFilter -AssociatedNetFirewallRule $rule
         if ($rule.Enabled -ne 'True' -or $rule.Direction -ne 'Inbound' -or $rule.Action -ne 'Allow' -or
             $rule.Profile -ne 'Any' -or $port.Protocol -notin @('TCP','6') -or
-            $port.LocalPort -ne '22' -or $address.RemoteAddress -notcontains 'LocalSubnet') {
+            $port.LocalPort -ne '22' -or $address.RemoteAddress -notcontains 'LocalSubnet' -or
+            $serviceFilter.Service -ne 'Any') {
             throw '防火墙规则核验未通过，请把输出发给 Agent；不要关闭整个防火墙。'
         }
 
@@ -216,6 +220,8 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
 代码由 `scripts/enable-windows-ssh.ps1` 同步生成。正常情况一次完成安装、自启、监听、防火墙、用户名／IPv4／前缀、默认目录主机公钥指纹与 B 地址网段比较；不读密码、不生成登录公钥、不将 B 的地址写成防火墙唯一允许来源。
 
 **一次回传：** 成功输出的复制块含两行：`A_LOGIN_CREDENTIAL: 请将此字段替换为 A 电脑的登录密码，或 B 电脑上包含登录密码的文件完整路径；已提供可填“已提供”`，以及 `SSH_HANDOFF_V1` 连接结果。提醒用户在 B 的回复框替换第一行占位后，将两行一起发送；目标 macOS 版本未知时一并补充。密码或路径是普通文本，无需 JSON 转义。Agent 将原始复制块作为私有输入交给 import，程序提取凭据到私有文件，状态／证据只保存不含密码的连接数据；禁止把带密码的原始复制块当成公开证据或回显。Agent 解析结构化字段，不把任何输出拼接执行为命令；多网卡候选由 B 结合自身前缀与路由筛选。`local-ready` 只代表本机配置检查通过，`same_subnet_from_a` 的 true/false/null 分别表示按 A 前缀匹配／不匹配／B 地址未知，不得称“局域网已验证”。
+
+**旧版 22 超时修复：** ≤0.2.1 曾使用 `Service=sshd`；若服务 SID 为 `NONE`，此规则无法匹配。新版在原专用规则上显式设置并校验 `Service=Any`，保留 TCP 22 与本地子网限制。已经修复并连通时直接续接验收，不再粘贴旧版本配置块。
 
 **第三方防护提示：** A 上若安装 360、火绒、腾讯电脑管家等，其网络防护可能另行拦截；Windows 防火墙规则通过不代表第三方规则已放行。被拦截时优先放行 OpenSSH／TCP 22；无法放行时，用户可临时关闭该软件的网络防护以重试，验证后恢复。保留拦截可能导致连接失败；不把拒绝关闭软件等同于必然失败，脚本不自动关闭安全软件或整个防火墙。
 
@@ -353,7 +359,7 @@ python scripts/workflow.py --run "任务目录" --json recover
 ```
 
 - `DEPENDENCY_MISSING`：只安装 B 的私有依赖，随后重跑 verify。
-- `SSH_TIMEOUT/SSH_REFUSED/SSH_UNREACHABLE`：不叠装、不换认证路线，重新生成固定的 A 端配置和检查块，一次回传当前 IP、服务、监听、防火墙与指纹；之前的地址可能已经变化。若 A 装有 360、火绒、腾讯电脑管家等，检查其独立网络防护：优先放行 OpenSSH／TCP 22；无法放行时可由用户临时关闭网络防护重试，验证后恢复。不自动关闭安全软件；继续保留拦截可能导致连接失败。
+- `SSH_TIMEOUT/SSH_REFUSED/SSH_UNREACHABLE`：不叠装、不换认证路线，重新生成固定的 A 端配置和检查块，一次回传当前 IP、服务、监听、防火墙与指纹；之前的地址可能已经变化。旧版 ≤0.2.1 的规则可能仍绑定 `Service=sshd`，新版配置块会显式改为 `Any`，并从有效策略复核；不需要重装 SSH 或改变服务 SID。如果已在外部完成这项修复且当前步骤仍允许 verify，复用现有可信回传与凭据直接 verify，不再要求用户重跑旧代码；已进入 diagnose 时先登记新修复证据再验收。若 A 装有 360、火绒、腾讯电脑管家等，检查其独立网络防护：优先放行 OpenSSH／TCP 22；无法放行时可由用户临时关闭网络防护重试，验证后恢复。不自动关闭安全软件；继续保留拦截可能导致连接失败。
 - `HOST_KEY_MISMATCH`：不发送密码；从 A 获取新结果，检查重装／地址变化。不要关闭验证。新结果也要通过身份检查。
 - `FINGERPRINT_READ_FAILED`：对比用户收到的代码与模板后交付固定代码；不卸载 SSH。仅有 `SETUP_FAILED` 时，原始错误仍由 Agent 从用户提供的私有文件检查，不能忽略组件来源或安装错误。
 - `RESTART_REQUIRED`：告知保存工作并重启 A，再运行配置块；不自动重启未获授权的电脑。
@@ -394,7 +400,7 @@ python scripts/workflow.py --run "任务目录" --json repair-result --file "处
 
 进度写在 `workflow-state.json`，事件在 `workflow-events.jsonl`；`state.json` 只是兼容投影。`agentkit checkpoint` 拒绝修改受控任务的阶段。程序锁防止两个进程同时推进，进程退出后锁自动释放。
 
-操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，不能直接手改 sources 解锁。v0.2.1 登记了 v0.2.0 的源哈希，00 或刚完成 00 且未提交后续审核的任务，可用新版的 `upgrade` 备份迁移；正在运行、未知版本或修改过的源哈希会拒绝。阶段、身份、连接信息、失败计数和证据保留，不重新安装 SSH。
+操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，不能直接手改 sources 解锁。v0.2.2 登记了 v0.2.0／v0.2.1 的源哈希，00 或刚完成 00 且未提交后续审核的任务，可用新版的 `upgrade` 备份迁移；正在运行、未知版本或修改过的源哈希会拒绝。阶段、身份、连接信息、失败计数和证据保留，不重新安装 SSH。
 
 ```text
 python scripts/workflow.py --run "原任务目录" --json upgrade
@@ -491,12 +497,15 @@ python scripts/workflow.py --run "任务目录" --json review --file "阶段检�
 - `Set-Service -StartupType Automatic` 让服务随 Windows 启动；`Start-Service` 立即启动。不要手工运行 `sshd.exe -D` 或依靠终端后台作业替代 Windows 服务。关闭 PowerShell 不会结束正常的 sshd 服务。
 - 必须核对 22 的 `OwningProcess` 等于 sshd 服务进程，并且绑定通配地址或当前网卡 IPv4；不能仅看服务 Running 或任意进程占用了 22。旧服务若使用自定义端口，按实际意图适配监听与防火墙，不能强行抢占 22。
 - 脚本写入 `PersistentStore`，再从 `ActiveStore` 读取专用规则并检查方向、动作、端口与地址范围。规则使用 `Profile Any` 和 `RemoteAddress LocalSubnet`，支持公用／专用／域网络与同子网 DHCP 地址变化。原有其他规则不被改动，因此也不能声称整个系统只开放了本地子网。[防火墙规则参数](https://learn.microsoft.com/en-us/powershell/module/netsecurity/set-netfirewallrule)
+- 规则显式使用 `Service=Any`，并从 `ActiveStore` 读取服务过滤器确认；同时清除旧版规则的 `sshd` 绑定。服务 SID 为 `NONE` 时，指定服务的规则不能匹配，不能仅因规则存在而报告有效。保留 TCP 22／LocalSubnet／AnyProfile，不修改服务 SID、不重启服务来绕过。[微软服务规则限制](https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/configure)
 - 跨网段或 VPN 场景需要 Agent 将规则来源适配为 B 的实际地址／授权网段；本地子网规则不保证跨网段连接。显式阻止规则、组织禁止本地规则合并、第三方防火墙、AP 隔离等也可能阻止访问；不能把一条 Allow 规则读回成功当作链路可通。
 - 结果一次包含所有有效 IPv4／前缀、实际用户名和默认目录主机公钥的 SHA256 指纹，由 B 选择可达地址并验证。多网卡、169.254 自动地址、VPN 或默认路由异常先查现场；不要沿用旧 IP。服务自启不固定 IP，需要时可指导用户在路由器给对应网卡做 DHCP 地址保留。
 
 若用户报告“关闭窗口后就断了”，先区分是手工前台 sshd、服务崩溃，还是随后睡眠／断网／IP 变化，不让用户靠保持终端开启来维持连接。若运行中的服务确实反复退出，收集 OpenSSH Operational 和 System 服务控制管理器日志，修复具体原因后再评估服务恢复动作，不用无限重启掩盖错误。
 
 A 可以关闭 PowerShell，B 自动新建独立 SSH 会话。将重启后的自启测试合并到后续已安排的重启，不额外要求重启一次；未实测时如实记录未测。`Running/Auto` 不代表电脑睡眠或关机时也能响应。
+
+**超时判读：** `Get-NetFirewallProfile` 列出所有配置文件，Public 显示 Enabled 不等于当前网络一定为公用，更不能据此认定阻断；网络类别应另查 `Get-NetConnectionProfile`。安装了安全软件不证明它正在拦截，TCP 超时也不单独证明过滤来源。`localhost:22=True` 只证实本地连接可用。检查阻止规则时须考虑协议、端口数组／范围、程序／服务、地址和配置文件条件；只用 `22|Any` 正则未发现规则，不能排除拦截。先检查本包自己的有效规则，再按证据定位其他因素。
 
 ### 00-4 用密码完成真实连接
 

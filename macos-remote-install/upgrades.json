@@ -15,6 +15,22 @@
         "00-remote",
         "01-hardware"
       ]
+    },
+    "0.2.1": {
+      "sources": {
+        "workflow.py": "2a0b15c87192e5d781d3c438b943df45b383a53beb1dc5cf79f2fce664fb05e4",
+        "ssh_transport.py": "71a441e14dc6a4e130322e764e4bf37f9c21b23f1d9b4f2126c3e4debe5a2433",
+        "probe-windows.ps1": "94b14954f96674d821250f47bcd23f06f1c06b67adc7d28b7509f64ca4f6d75f",
+        "enable-windows-ssh.ps1": "af8dc825ddf19a47c03326a2ed16e0f2da25d8d3513446e5e32a101ccd972b1b",
+        "prepare_ssh_handoff.py": "c0501af412042320a883a22b45638221f3e7a527b351d93ef0e5369bc8d7071f",
+        "agentkit.py": "16186ae8ed3ed2efb0a967b850426588692dd28c218d4e2d28ed528812a02cdc",
+        "workflow.json": "2ba247bb79641d6c2e07c1bb3ca67faba03e6e11581f2f85cd475c197997416a",
+        "upgrades.json": "c37df6119997ea85f748d06f355c2bff4a9856233a02ad15d736367bc88ee182"
+      },
+      "allowed_phases": [
+        "00-remote",
+        "01-hardware"
+      ]
     }
   }
 }
