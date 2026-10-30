@@ -25,7 +25,30 @@
       ],
       "rewind_phases": [
         "04-install"
-      ]
+      ],
+      "source_variants": {
+        "workflow.py": [
+          "3e3414252c527134c331f14197bb6b842eee92a7cb70600b0ed1fcbc64d0d6d8"
+        ],
+        "ssh_transport.py": [
+          "0bd34cb1b16eb03adb173409401244aa940868571aa4544dad543ae07d0cc245"
+        ],
+        "probe-windows.ps1": [
+          "47a772c41058a91c3c412c8f1cab2bc335b5b14c0d2d909720a93a8b79cde360"
+        ],
+        "enable-windows-ssh.ps1": [
+          "160198eb2590c7652010d80843fabeb3a431e5448c7cf0dd3d08550e20ca9eec"
+        ],
+        "prepare_ssh_handoff.py": [
+          "c4b45b349ff7e4f575bfeeae9adb2cb64eaf49768acad0c57924847375b78b9f"
+        ],
+        "agentkit.py": [
+          "15c3e8409541967bbbd3c51451226c3f5897f063b7bfe5a9331c3a17ffac3985"
+        ],
+        "workflow.json": [
+          "a1318761d83fd8efa8bc93f6d6aec93b8f60adefa7cb087d601a7246764066ff"
+        ]
+      }
     },
     "0.2.1": {
       "sources": {
@@ -52,7 +75,33 @@
       ],
       "rewind_phases": [
         "04-install"
-      ]
+      ],
+      "source_variants": {
+        "workflow.py": [
+          "4f1d52f8ebdeff8cfe53773e500625d45b2b3d5b1517a129a45f6c05e4c447a8"
+        ],
+        "ssh_transport.py": [
+          "f1604eef0388eb51c27a784157690e0d8af13cbe98823ac1eca49ed07e7e20f7"
+        ],
+        "probe-windows.ps1": [
+          "47a772c41058a91c3c412c8f1cab2bc335b5b14c0d2d909720a93a8b79cde360"
+        ],
+        "enable-windows-ssh.ps1": [
+          "d5c1bb62d0c22c09d995c066c5161f9142e6b5f7577737cdac6c58b3ffc03ddb"
+        ],
+        "prepare_ssh_handoff.py": [
+          "c4b45b349ff7e4f575bfeeae9adb2cb64eaf49768acad0c57924847375b78b9f"
+        ],
+        "agentkit.py": [
+          "15c3e8409541967bbbd3c51451226c3f5897f063b7bfe5a9331c3a17ffac3985"
+        ],
+        "workflow.json": [
+          "4b5d60389830657fe190c386fa0b16c9cd4cac416696df6fbc0cc028114dac1a"
+        ],
+        "upgrades.json": [
+          "20e00bc680e0fa456674ec221767ce7b9b2f6fdf6dc3d3208da6bc6ddef05773"
+        ]
+      }
     },
     "0.2.2": {
       "sources": {
@@ -79,7 +128,88 @@
       ],
       "rewind_phases": [
         "04-install"
-      ]
+      ],
+      "source_variants": {
+        "workflow.py": [
+          "58cc9590484a1fb39b5545c98f264c77b35be69872a8864cefcb4dcf43ae9cce"
+        ],
+        "ssh_transport.py": [
+          "f1604eef0388eb51c27a784157690e0d8af13cbe98823ac1eca49ed07e7e20f7"
+        ],
+        "probe-windows.ps1": [
+          "47a772c41058a91c3c412c8f1cab2bc335b5b14c0d2d909720a93a8b79cde360"
+        ],
+        "enable-windows-ssh.ps1": [
+          "7fcc8ecc315ba03ab103788241c73417dfeaca6ceea1d1296ca3e1a5f9fd55e8"
+        ],
+        "prepare_ssh_handoff.py": [
+          "c4b45b349ff7e4f575bfeeae9adb2cb64eaf49768acad0c57924847375b78b9f"
+        ],
+        "agentkit.py": [
+          "15c3e8409541967bbbd3c51451226c3f5897f063b7bfe5a9331c3a17ffac3985"
+        ],
+        "workflow.json": [
+          "f85bd803a22d3a8425582fd52f155c3123221688bdc147cfabe5c96519767554"
+        ],
+        "upgrades.json": [
+          "843d74d3c778f08af2f9490f13a9fe0d7f8b8a49a79b6e3c539ec335c093cc14"
+        ]
+      }
+    },
+    "0.2.3": {
+      "sources": {
+        "workflow.py": "8814b50c44df143ea3bc48f236552265124528fa33202158231db3c65f3fa040",
+        "ssh_transport.py": "71a441e14dc6a4e130322e764e4bf37f9c21b23f1d9b4f2126c3e4debe5a2433",
+        "probe-windows.ps1": "94b14954f96674d821250f47bcd23f06f1c06b67adc7d28b7509f64ca4f6d75f",
+        "enable-windows-ssh.ps1": "799bc26434b424f4cbdb894f0ae77cccb00731496dceffe1e3eddd04171c97b9",
+        "prepare_ssh_handoff.py": "c0501af412042320a883a22b45638221f3e7a527b351d93ef0e5369bc8d7071f",
+        "agentkit.py": "16186ae8ed3ed2efb0a967b850426588692dd28c218d4e2d28ed528812a02cdc",
+        "acpi_guard.py": "35b6c9522418260d3af4ff253e6a36882eb3b5c583f4469088e5988058de4ba5",
+        "workflow.json": "845a65a6b7d17a411b8ad5fb9cea8af80e737285a2495b0a6641b60e878dc48e",
+        "upgrades.json": "483c6ce6c4b7e92c0fbf5519df2a8a6512a4fbdb9f21cb5fb21103c7e17020bc"
+      },
+      "allowed_phases": [
+        "00-remote",
+        "01-hardware",
+        "02-storage",
+        "03-media",
+        "04-install"
+      ],
+      "allowed_review_phases": [
+        "01-hardware",
+        "02-storage",
+        "03-media"
+      ],
+      "rewind_phases": [],
+      "source_variants": {
+        "workflow.py": [
+          "07cdb79bafff4a5797698be945b4c95b175b76081c6557d0553e11bcd468700f"
+        ],
+        "ssh_transport.py": [
+          "f1604eef0388eb51c27a784157690e0d8af13cbe98823ac1eca49ed07e7e20f7"
+        ],
+        "probe-windows.ps1": [
+          "47a772c41058a91c3c412c8f1cab2bc335b5b14c0d2d909720a93a8b79cde360"
+        ],
+        "enable-windows-ssh.ps1": [
+          "7fcc8ecc315ba03ab103788241c73417dfeaca6ceea1d1296ca3e1a5f9fd55e8"
+        ],
+        "prepare_ssh_handoff.py": [
+          "c4b45b349ff7e4f575bfeeae9adb2cb64eaf49768acad0c57924847375b78b9f"
+        ],
+        "agentkit.py": [
+          "15c3e8409541967bbbd3c51451226c3f5897f063b7bfe5a9331c3a17ffac3985"
+        ],
+        "acpi_guard.py": [
+          "93d7827c99aa26057d1bed9ff0b82ffd8ab6b1eb545c0140e3b7c965dffde196"
+        ],
+        "workflow.json": [
+          "a9230a791fdb34e95920c71da4a10ce06ce5b1c207ed6994827ba2b46de571cd"
+        ],
+        "upgrades.json": [
+          "70c10ea21bb5672d8dc44e18f87eb3be1e4d48e8b8d3f8ab7a3de620dbbce986"
+        ]
+      }
     }
   }
 }

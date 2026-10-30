@@ -1,0 +1,15 @@
+# Keep text checkout reproducible even when Windows core.autocrlf is enabled.
+* text=auto
+*.py text eol=lf
+*.ps1 text eol=lf
+*.sh text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+.gitattributes text eol=lf
+*.zip -text
+*.aml -text
+*.efi -text
+*.dmg -text

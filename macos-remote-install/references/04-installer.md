@@ -31,6 +31,14 @@ OpenCore 程序、OpenRuntime、Sample.plist、Configuration 文档和 ocvalidat
 
 SysReport 路线是**采集启动**：使用所选 OC 版本文档要求的 DEBUG 构建，核对 `Misc → Debug → SysReport`、可写输出位置和日志，设置显示启动菜单并关闭自动倒计时（`ShowPicker=true`、`Timeout=0`，以该版本文档为准）。交接明确“停在 OC 菜单，不选 macOS；随后从主板 Windows Boot Manager 回 Windows”。确认导出文件实际存在并有效后，再组装安装 EFI；仅开启选项或看到菜单不能算采集成功。保留 Windows 引导和 U 盘备份，不覆盖硬盘 ESP 来采集。[OpenCore 配置文档](https://github.com/acidanthera/OpenCorePkg/blob/master/Docs/Configuration.tex)
 
+## 避免本次实测中出现的三类返工
+
+**按命名空间适配，不按示例猜路径。** 在 DSDT 与相关 SSDT 中核对真实对象、完整父路径、`_HID`／`_CID`、`_STA` 及 `_OSI` 条件。`PCI0` 和 `PC00` 不可互换；样例 `External` 或 `Scope` 指向不存在的对象时，编译成功仍不等于补丁能工作。记录补丁引用的已有对象与主动创建的新对象，分别说明依据。EC／USBX、CPU plugin、RTC／AWAC 各自判断，不把本例的补丁清单变成所有机器的模板。搜不到一次字符串不等于设备不存在：同时检查 EisaId／字符串表示、关联 SSDT 与条件状态。RTC 和 AWAC 可能由同一状态字段互斥启用；依据实际逻辑决定是否需要修复，不直接宣布“缺 RTC”。分析与编译日志保存在 assessment 引用的证据中；控制器的文件检查不会理解这些 ASL 语义。
+
+**库调用也可能有交互。** SSDTTime 某些生成方法会要求选表／确认，不能把“是 Python 方法”当成无交互 API。先检查锁定源码与实际提示，用有边界的子进程试运行：默认墙钟不超过 120 秒、合并日志不超过 4 MiB；以流方式计数并在上限到达时停止自己启动的进程及子进程。进程树必须绑定本次 PID，不杀所有 python／sshd。若提示不断重复、stdin EOF 或日志持续增长，立即停止并记为失败，不无限等待或继续后台写盘。工具明确报告正常长操作时才按新证据调整上限。随后准备确定的输入或已验证的非交互调用；需要手工 ASL 时仍按原始表核对、编译、复查，不能把工具失败当作跳过验收的理由。
+
+**在新版本目录构建。** 默认创建未占用的 `staging/efi/<变体>-<唯一编号>`，从已锁定组件中只复制需要的内容；保留上一版和已验收证据，避免先复制所有文件再批量删除。编译、ocvalidate 和文件引用通过后，再按已有授权核对 U 盘身份、备份并部署。不要反复清空 staging、任务目录或 U 盘来重试，也不要覆盖被旧验收引用的证据文件。Agent 应遵守自身工具的审批机制，不通过改调用形式绕过提示；真实目标与授权未变时不自行增加额外的重复确认。
+
 ## 03 的程序验收清单
 
 `review` 的 `acpi_tables` 检查必须为 `pass`，并增加 `manifest` 字段，值为任务目录内的相对路径，例如 `inventory/acpi/collection.json`。该清单采用下面的结构；所有 SHA256、UUID、路径和分析均由实际采集生成，不能把示例当证据。

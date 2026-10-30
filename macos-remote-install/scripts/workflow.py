@@ -17,7 +17,7 @@ from prepare_ssh_handoff import render, SOURCE
 from ssh_transport import Fault, parse_packet, verify_connection, credential_from_bundle
 from acpi_guard import check_acpi_evidence
 
-VERSION = '0.2.3'
+VERSION = '0.2.4'
 ROOT = Path(__file__).resolve().parent
 CONTRACT_PATH = ROOT.parent / 'workflow.json'
 UPGRADE_PATH = ROOT.parent / 'upgrades.json'
@@ -65,7 +65,24 @@ ERRORS = {
 
 
 def source_lock():
-    return {name:sha(ROOT / name)['sha256'] for name in TRACKED} | {'workflow.json':sha(CONTRACT_PATH)['sha256'],'upgrades.json':sha(UPGRADE_PATH)['sha256']}
+    return {name:source_sha(ROOT / name) for name in TRACKED} | {'workflow.json':source_sha(CONTRACT_PATH),'upgrades.json':source_sha(UPGRADE_PATH)}
+
+
+def source_sha(path):
+    # Only the explicit text source list uses LF identity. Evidence stays byte-exact.
+    original=sha(path)
+    data=path.read_bytes()
+    if hashlib.sha256(data).hexdigest()!=original['sha256']:
+        raise Fault('SOURCE_CHANGED')
+    data.decode('utf-8')
+    return hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()
+
+
+def registered_sources_match(actual, profile):
+    expected=profile['sources']
+    if not isinstance(actual,dict) or set(actual)!=set(expected): return False
+    variants=profile.get('source_variants',{})
+    return all(actual[name] in [value,*variants.get(name,[])] for name,value in expected.items())
 
 
 def atomic_json(path, value):
@@ -174,7 +191,7 @@ def initialize(run):
             raise Fault('ACTION_NOT_ALLOWED')
         state = {'schema':'workflow-state-v1','version':VERSION,'run_id':uuid.uuid4().hex,
                  'revision':0,'phase':'00-remote','step':'prepare','status':'planned',
-                 'sources':source_lock(),'packet':None,'verification_proofs':[],
+                 'sources':source_lock(),'source_hash_mode':'utf8-lf-v1','packet':None,'verification_proofs':[],
                  'failure':None,'attempt_signature':None,'attempt_count':0,'repair':None,
                  'machine_a':None,'created_utc':utc()}
         save(run, state, 'init')
@@ -188,7 +205,7 @@ def upgrade(run,state):
     previous=state.get('version')
     profile=read_json(UPGRADE_PATH)['from'].get(previous)
     reviews=state.get('guided_reviews',[])
-    if not profile or state['sources']!=profile['sources'] or state['phase'] not in profile['allowed_phases'] or state['status']=='running':
+    if not profile or not registered_sources_match(state['sources'],profile) or state['phase'] not in profile['allowed_phases'] or state['status']=='running':
         raise Fault('UPGRADE_UNSUPPORTED')
     allowed=set(profile.get('allowed_review_phases',[]))
     if any(r['phase'] not in allowed for r in reviews):
@@ -197,13 +214,14 @@ def upgrade(run,state):
         verify_evidence(run,r['report'])
         for p in r['proofs']: verify_evidence(run,p)
     backup=evidence(run,'before-workflow-upgrade',state)
-    state.update(version=VERSION,sources=current)
+    variants=[name for name,value in state['sources'].items() if value!=profile['sources'][name]]
+    state.update(version=VERSION,sources=current,source_hash_mode='utf8-lf-v1')
     if state['phase'] in profile.get('rewind_phases',[]):
         # Preserve completed work as history; supersede only the old media review.
         state.setdefault('superseded_guided_reviews',[]).extend(r for r in reviews if r['phase']=='03-media')
         state['guided_reviews']=[r for r in reviews if r['phase']!='03-media']
         state.update(phase='03-media',step='guided-contract',status='planned',failure=None)
-    state.setdefault('upgrades',[]).append({'from':previous,'to':VERSION,'backup':backup})
+    state.setdefault('upgrades',[]).append({'from':previous,'to':VERSION,'backup':backup,'registered_line_ending_variants':variants})
     save(run,state,f'upgrade-{previous}-to-{VERSION}')
 
 

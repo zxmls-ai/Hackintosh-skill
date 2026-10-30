@@ -120,7 +120,7 @@ python scripts/workflow.py --run "任务目录" --json repair-result --file "处
 
 进度写在 `workflow-state.json`，事件在 `workflow-events.jsonl`；`state.json` 只是兼容投影。`agentkit checkpoint` 拒绝修改受控任务的阶段。程序锁防止两个进程同时推进，进程退出后锁自动释放。
 
-操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，不能直接手改 sources 解锁。v0.2.3 登记了 v0.2.0～v0.2.2 的源哈希，00～04 的任务可用新版 `upgrade` 备份迁移；保留已经核验的 01／02 记录。旧任务已进 04 时，将旧 03 审核留作历史并回到 03 补验，不据此重做分区／格式化或中止正在进行的安装；正在运行、未知版本或修改过的源哈希会拒绝。阶段、身份、连接信息、失败计数和证据保留，不重新安装 SSH。
+操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，不能直接手改 sources 解锁。v0.2.4 登记了 v0.2.0～v0.2.3 的源哈希及这些公开源码的 LF／CRLF 形式，00～04 的任务可用新版 `upgrade` 备份迁移；保留已经核验的 01／02 记录。≤0.2.2 旧任务已进 04 时，将旧 03 审核留作历史并回到 03 补验；0.2.3 的已验阶段不因本次哈希修复回退，不据此重做分区／格式化或中止正在进行的安装；正在运行、未知版本或修改过的源哈希会拒绝。阶段、身份、连接信息、失败计数和证据保留，不重新安装 SSH。
 
 ```text
 python scripts/workflow.py --run "原任务目录" --json upgrade
@@ -136,6 +136,12 @@ python scripts/workflow.py --run "任务目录" --json resume
 ```text
 python scripts/workflow.py --run "任务目录" --json recheck
 ```
+
+## 源码换行与升级
+
+`.gitattributes` 固定本仓库文本检出的 LF。v0.2.4 的源码锁定只对显式登记的 UTF-8 文本做 CRLF→LF 后计算身份；不去掉 BOM、不裁剪空白、不重排 JSON，也不忽略代码改动。ACPI、EFI、备份、日志和验收证据仍按原始字节核对。这样 Windows `core.autocrlf` 不再导致相同源码被误判。[Git 换行属性](https://git-scm.com/docs/gitattributes)
+
+旧任务的原始记录不要手改：新版 `upgrade` 只接受发布归档中预先登记的有限换行形式，完整备份旧状态并记录命中的变体，再切换到新源码身份。未知哈希仍拒绝，不可根据 Agent 猜测增补白名单／改 `sources`。已由其他工具手改过状态的任务要保留改前文件和取证记录，不能把它描述成原控制器自动迁移。升级失败时核对版本、实际内容和证据，不能“为了通过”重算记录。
 
 ## 01～08 的统一合同
 

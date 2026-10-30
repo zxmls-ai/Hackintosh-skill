@@ -13,12 +13,14 @@ SKILL = ROOT / "macos-remote-install"
 sys.path.insert(0, str(SKILL / "scripts"))
 from agentkit import no_link, sha
 
-VERSION = "0.2.3"
+VERSION = "0.2.4"
+if json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))["version"] != VERSION:
+    raise ValueError("Workflow version must match the package version")
 REF_NAMES = ["00-controller", "01-remote-access", "02-hardware-routing", "03-storage", "04-installer",
              "05-boot-handoff", "06-postinstall", "07-troubleshooting", "08-state-and-tools",
              "case-14700k-4070ti-super", "sources"]
 SOURCE_DOCS = [SKILL / "SKILL.md"] + [SKILL / "references" / (name + ".md") for name in REF_NAMES]
-TOP_FILES = ["README.md", "START-HERE.md", "AI-GUIDE.md", "LICENSE", ".gitignore",
+TOP_FILES = ["README.md", "START-HERE.md", "AI-GUIDE.md", "LICENSE", ".gitignore", ".gitattributes",
              "CONTRIBUTING.md", "TEST-FEEDBACK.md", "VALIDATION.md", "PUBLISH.md", "CHANGELOG.md"]
 SCRIPTS = ["agentkit.py", "target_guard.py", "collect-windows.ps1", "collect-macos.sh", "enable-windows-ssh.ps1", "prepare_ssh_handoff.py", "workflow.py", "ssh_transport.py", "probe-windows.ps1", "acpi_guard.py"]
 CODE = re.compile(r"(^```[^\n]*\n.*?^```[ \t]*$|`[^`\n]*`)", re.MULTILINE | re.DOTALL)
@@ -31,7 +33,7 @@ def sync_ssh_handoff():
     start, end = "<!-- windows-ssh-setup:start -->", "<!-- windows-ssh-setup:end -->"
     before, rest = text.split(start, 1)
     _, after = rest.split(end, 1)
-    target.write_text(before + start + "\n```powershell\n" + source + "\n```\n" + end + after, encoding="utf-8")
+    target.write_text(before + start + "\n```powershell\n" + source + "\n```\n" + end + after, encoding="utf-8", newline="\n")
 
 
 def body(text):
@@ -65,7 +67,7 @@ def make_guide():
         t = ''.join(part if index % 2 else re.sub(r"\[([^\]\n]+)\]\(([^)\n]+)\)", rewrite, part)
                     for index, part in enumerate(pieces))
         content.append(f'\n\n<a id="{anchors[p.resolve()]}"></a>\n\n{t}')
-    (ROOT / "AI-GUIDE.md").write_text("\n".join(content).rstrip() + "\n", encoding="utf-8")
+    (ROOT / "AI-GUIDE.md").write_text("\n".join(content).rstrip() + "\n", encoding="utf-8", newline="\n")
 
 
 def workbuddy_skill():
@@ -86,7 +88,7 @@ def source_files():
     selected += [SKILL / "scripts" / name for name in SCRIPTS]
     selected += [SKILL / "workflow.json", SKILL / "upgrades.json"]
     selected += [SKILL / "LICENSE", ROOT / "tests" / "test_helpers.py", ROOT / "tests" / "test_collect_windows.py", ROOT / "tests" / "test_ssh_handoff.py", ROOT / "tests" / "test_prepare_ssh_handoff.py",
-                 ROOT / "tests" / "test_workflow.py", ROOT / "tests" / "test_acpi_guard.py", ROOT / "tools" / "build_release.py", ROOT / ".github" / "ISSUE_TEMPLATE" / "installation-feedback.md"]
+                 ROOT / "tests" / "test_workflow.py", ROOT / "tests" / "test_acpi_guard.py", ROOT / "tests" / "test_source_identity.py", ROOT / "tools" / "build_release.py", ROOT / ".github" / "ISSUE_TEMPLATE" / "installation-feedback.md"]
     for p in selected:
         no_link(p)
         if not p.is_file(): raise ValueError(f"Missing public source file: {p.name}")
@@ -134,12 +136,12 @@ def main():
     pack(wb_zip, [(p.relative_to(ROOT).as_posix(), workbuddy_skill() if p == SKILL / "SKILL.md" else p.read_bytes())
                   for p in paths if SKILL in p.parents])
     sums = "\n".join(hashlib.sha256(p.read_bytes()).hexdigest() + "  " + p.name for p in (repo_zip, wb_zip)) + "\n"
-    (a.out_dir / "SHA256SUMS.txt").write_text(sums, encoding="utf-8")
+    (a.out_dir / "SHA256SUMS.txt").write_text(sums, encoding="utf-8", newline="\n")
     downloads = ROOT / "downloads"
     downloads.mkdir(exist_ok=True)
     no_link(downloads)
     (downloads / wb_zip.name).write_bytes(wb_zip.read_bytes())
-    (downloads / "SHA256SUMS.txt").write_text(hashlib.sha256(wb_zip.read_bytes()).hexdigest() + "  " + wb_zip.name + "\n", encoding="utf-8")
+    (downloads / "SHA256SUMS.txt").write_text(hashlib.sha256(wb_zip.read_bytes()).hexdigest() + "  " + wb_zip.name + "\n", encoding="utf-8", newline="\n")
     print(json.dumps({"public_file_count": len(paths), "repository_zip": str(repo_zip), "workbuddy_zip": str(wb_zip),
                       "crc_verified": True, "local_links_verified": True}, ensure_ascii=False, indent=2))
 

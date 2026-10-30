@@ -1,6 +1,6 @@
 # AI 远程协助安装 OpenCore 与 macOS：完整指南
 
-版本 0.2.3。此文件由 SKILL.md 与 references 合并生成。
+版本 0.2.4。此文件由 SKILL.md 与 references 合并生成。
 
 Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚本需取得完整仓库。没有工具时必须如实降级，不得编造执行结果。
 
@@ -31,6 +31,8 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
 本 Skill 定位为固定流程、AI 处理异常的安装工具。B 能执行 Python 时，先读取 [标准流程控制器](#section-00-controller)，运行 `python scripts/workflow.py --run "私有任务目录" --json init`；已有受控任务用 `status`。**正常流程根据 `next_action` 执行，向用户输出 `display`，不要重新编排步骤或手改任务状态。阶段 00 使用现成连接器，不另写一个替代验收；01～08 合同模式可用已核验身份的 SSH/SFTP 工具执行对应参考中的动作。** 文件路径与命令在 B 处理，不让用户逐条执行。
 
 阶段 00 已由程序实际验证 SSH、主机密钥、机器身份、管理员权限和文件传输，全部通过才推进。01～08 的统一合同在 [workflow.json](macos-remote-install/workflow.json)，当前仍由 Agent 按合同执行并提交有证据的审核结果，不能宣称全部阶段已自动验收。正常分支使用固定脚本，异常分支按错误码 `recover`；未覆盖问题使用 `diagnose → repair-result → 原步骤重验`。
+
+源码升级遇到 LF／CRLF 差异时使用控制器已登记的迁移能力，不手改任务的 `sources`。操作中的版本与阶段以 `workflow.py status` 为准，旧 NEXT.md 只作线索。工具探索、临时假设和逐文件检查留在私有日志；面向用户仍只显示三项简短进度，核对完整证据后再下结论。
 
 **阶段 03 的固定前置条件：** 默认复用有效本机 ACPI；缺少时由 Agent 在 A 准备 Python 与原作者工具，通过 SSH 在 Windows 中采集，不为了避免安装依赖而默认增加重启。只在用户选择“免 Python 方案”或默认路线经诊断仍不可用并得到用户选择时，用 OpenCore DEBUG 的 SysReport 采集。采集启动必须停在 OC 菜单后回 Windows，不交接“选择 macOS 恢复”。`review` 必须提交并通过实际 ACPI 表／配置／适配证据检查，详情见 [介质前置检查](#section-04-installer)。阶段 03 未过不得安排安装启动；下载、已授权的介质准备和明确标注的诊断启动可在此前进行。
 
@@ -404,7 +406,7 @@ python scripts/workflow.py --run "任务目录" --json repair-result --file "处
 
 进度写在 `workflow-state.json`，事件在 `workflow-events.jsonl`；`state.json` 只是兼容投影。`agentkit checkpoint` 拒绝修改受控任务的阶段。程序锁防止两个进程同时推进，进程退出后锁自动释放。
 
-操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，不能直接手改 sources 解锁。v0.2.3 登记了 v0.2.0～v0.2.2 的源哈希，00～04 的任务可用新版 `upgrade` 备份迁移；保留已经核验的 01／02 记录。旧任务已进 04 时，将旧 03 审核留作历史并回到 03 补验，不据此重做分区／格式化或中止正在进行的安装；正在运行、未知版本或修改过的源哈希会拒绝。阶段、身份、连接信息、失败计数和证据保留，不重新安装 SSH。
+操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，不能直接手改 sources 解锁。v0.2.4 登记了 v0.2.0～v0.2.3 的源哈希及这些公开源码的 LF／CRLF 形式，00～04 的任务可用新版 `upgrade` 备份迁移；保留已经核验的 01／02 记录。≤0.2.2 旧任务已进 04 时，将旧 03 审核留作历史并回到 03 补验；0.2.3 的已验阶段不因本次哈希修复回退，不据此重做分区／格式化或中止正在进行的安装；正在运行、未知版本或修改过的源哈希会拒绝。阶段、身份、连接信息、失败计数和证据保留，不重新安装 SSH。
 
 ```text
 python scripts/workflow.py --run "原任务目录" --json upgrade
@@ -420,6 +422,12 @@ python scripts/workflow.py --run "任务目录" --json resume
 ```text
 python scripts/workflow.py --run "任务目录" --json recheck
 ```
+
+## 源码换行与升级
+
+`.gitattributes` 固定本仓库文本检出的 LF。v0.2.4 的源码锁定只对显式登记的 UTF-8 文本做 CRLF→LF 后计算身份；不去掉 BOM、不裁剪空白、不重排 JSON，也不忽略代码改动。ACPI、EFI、备份、日志和验收证据仍按原始字节核对。这样 Windows `core.autocrlf` 不再导致相同源码被误判。[Git 换行属性](https://git-scm.com/docs/gitattributes)
+
+旧任务的原始记录不要手改：新版 `upgrade` 只接受发布归档中预先登记的有限换行形式，完整备份旧状态并记录命中的变体，再切换到新源码身份。未知哈希仍拒绝，不可根据 Agent 猜测增补白名单／改 `sources`。已由其他工具手改过状态的任务要保留改前文件和取证记录，不能把它描述成原控制器自动迁移。升级失败时核对版本、实际内容和证据，不能“为了通过”重算记录。
 
 ## 01～08 的统一合同
 
@@ -715,6 +723,14 @@ OpenCore 程序、OpenRuntime、Sample.plist、Configuration 文档和 ocvalidat
 
 SysReport 路线是**采集启动**：使用所选 OC 版本文档要求的 DEBUG 构建，核对 `Misc → Debug → SysReport`、可写输出位置和日志，设置显示启动菜单并关闭自动倒计时（`ShowPicker=true`、`Timeout=0`，以该版本文档为准）。交接明确“停在 OC 菜单，不选 macOS；随后从主板 Windows Boot Manager 回 Windows”。确认导出文件实际存在并有效后，再组装安装 EFI；仅开启选项或看到菜单不能算采集成功。保留 Windows 引导和 U 盘备份，不覆盖硬盘 ESP 来采集。[OpenCore 配置文档](https://github.com/acidanthera/OpenCorePkg/blob/master/Docs/Configuration.tex)
 
+## 避免本次实测中出现的三类返工
+
+**按命名空间适配，不按示例猜路径。** 在 DSDT 与相关 SSDT 中核对真实对象、完整父路径、`_HID`／`_CID`、`_STA` 及 `_OSI` 条件。`PCI0` 和 `PC00` 不可互换；样例 `External` 或 `Scope` 指向不存在的对象时，编译成功仍不等于补丁能工作。记录补丁引用的已有对象与主动创建的新对象，分别说明依据。EC／USBX、CPU plugin、RTC／AWAC 各自判断，不把本例的补丁清单变成所有机器的模板。搜不到一次字符串不等于设备不存在：同时检查 EisaId／字符串表示、关联 SSDT 与条件状态。RTC 和 AWAC 可能由同一状态字段互斥启用；依据实际逻辑决定是否需要修复，不直接宣布“缺 RTC”。分析与编译日志保存在 assessment 引用的证据中；控制器的文件检查不会理解这些 ASL 语义。
+
+**库调用也可能有交互。** SSDTTime 某些生成方法会要求选表／确认，不能把“是 Python 方法”当成无交互 API。先检查锁定源码与实际提示，用有边界的子进程试运行：默认墙钟不超过 120 秒、合并日志不超过 4 MiB；以流方式计数并在上限到达时停止自己启动的进程及子进程。进程树必须绑定本次 PID，不杀所有 python／sshd。若提示不断重复、stdin EOF 或日志持续增长，立即停止并记为失败，不无限等待或继续后台写盘。工具明确报告正常长操作时才按新证据调整上限。随后准备确定的输入或已验证的非交互调用；需要手工 ASL 时仍按原始表核对、编译、复查，不能把工具失败当作跳过验收的理由。
+
+**在新版本目录构建。** 默认创建未占用的 `staging/efi/<变体>-<唯一编号>`，从已锁定组件中只复制需要的内容；保留上一版和已验收证据，避免先复制所有文件再批量删除。编译、ocvalidate 和文件引用通过后，再按已有授权核对 U 盘身份、备份并部署。不要反复清空 staging、任务目录或 U 盘来重试，也不要覆盖被旧验收引用的证据文件。Agent 应遵守自身工具的审批机制，不通过改调用形式绕过提示；真实目标与授权未变时不自行增加额外的重复确认。
+
 ## 03 的程序验收清单
 
 `review` 的 `acpi_tables` 检查必须为 `pass`，并增加 `manifest` 字段，值为任务目录内的相对路径，例如 `inventory/acpi/collection.json`。该清单采用下面的结构；所有 SHA256、UUID、路径和分析均由实际采集生成，不能把示例当证据。
@@ -827,6 +843,8 @@ com.apple.recovery.boot/
 读取可辨认的报错；模糊文字明确标记，不补写。`[EB|LOG:EXITBS:START]` 停滞需结合 Booter／UEFI 内存映射、CFG Lock／CPU 补丁等证据定位，不能凭该行断定缺 ACPI。先回 Windows 备份并读取本次 U 盘日志、实际 config.plist 与已加载 ACPI，核对 MAT 支持等实际信息，再一次改一个有依据的变量；不要盲套通用 Quirks 组合。[Dortania 排查](https://dortania.github.io/OpenCore-Install-Guide/troubleshooting/extended/kernel-issues.html)
 
 最后一行不一定是根因：结合完整 panic、调用栈、OC 日志、启动阶段与最近改动判定。先提出一个可验证假设，保留当前可用 EFI，做最小变更，再让用户重复测试。
+
+诊断启动也要说明改了哪些变量。若同时修正了 ACPI、Booter 与 CPU 设置，只能把成功记录为“该组合可启动”，不能据此宣布某一项就是根因。`DmgLoading` 等校验设置仅在对应错误与来源核验支持下调整，不为“排除一种可能”默认放宽；已走到 EXITBS 也不是镜像签名失败的证据。首次启动持续有新日志时继续观察；不要把“30 秒未进界面”一律写成长按断电条件。确认无进展后先保留可见证据，优先正常重启／关机，已开始安装写盘时另按安装日志判断。
 
 ## 断线时交付的信息
 
