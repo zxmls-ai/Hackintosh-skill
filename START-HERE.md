@@ -1,6 +1,6 @@
 # 给 WorkBuddy＋DeepSeek 的第一版安装工作流
 
-版本：0.1.2 · 2026-10-29。A 是待安装的电脑，B 是运行 Agent 的电脑。
+版本：0.1.3 · 2026-10-30。A 是待安装的电脑，B 是运行 Agent 的电脑。
 
 ## 推荐开始方式
 
@@ -8,11 +8,11 @@
 2. 在 WorkBuddy 中选择 DeepSeek，把解压目录作为可读取的工作目录。确保它可以使用终端、网络和本地文件；实际权限由 WorkBuddy 控制，Skill 不能授予权限。
 3. 发送下面这段提示，把路径换成自己的真实路径。无需先恢复 A 为 Windows 单系统，也不用先清空 U 盘；先让 Agent 识别当前状态，按你的重装意图制定方案。
 
-> 请读取 D:\macos-agent-kit\macos-remote-install\SKILL.md，并按它协助我在另一台 A 电脑上安装 OpenCore 与 macOS。你运行在 B 电脑，任何安装磁盘操作都针对远端 A，不能针对 B。请实际采集 A 的配置，不要直接套旧案例。先检查你的工具能力并引导我配置 Windows SSH，再继续兼容性评估、备份、安装和驱动检查。保留 Windows；安装版本和目标空间先根据现场确定。自动完成已授权且可以完成的操作；清空 U 盘或分区前展示明确目标和备份结果。人工步骤优先 GUI，每阶段说明进度，重启前保存续接记录。不要把尚未验证的功能报告为成功。
+> 请读取 D:\macos-agent-kit\macos-remote-install\SKILL.md，并按它协助我在另一台 A 电脑上安装 OpenCore 与 macOS。你运行在 B 电脑，任何安装磁盘操作都针对远端 A，不能针对 B。请实际采集 A 的配置，不要直接套旧案例。先检查你的工具能力并引导我配置 Windows SSH，再继续兼容性评估、备份、安装和驱动检查。保留 Windows；安装版本和目标空间先根据现场确定。自动完成已授权且可以完成的操作；清空 U 盘或分区前展示明确目标和备份结果。阶段 00 用完整 PowerShell 代码配置 SSH，其他人工步骤优先 GUI，每阶段说明进度，重启前保存续接记录。不要把尚未验证的功能报告为成功。
 
 如果 A 已在 macOS，Agent 应先询问是「检查现有系统」还是「从 Windows 重新安装」，不会擅自重装。首次连接所需的地址、账号与授权范围会在工作流中收集；不必把密码公开写进这份文件。
 
-Windows 首次接入默认使用实际账户名与非空账户密码，PIN 不等于密码，公钥不是必需步骤。首次安装交接应同时给 GUI 路线与 [SKILL 主入口的完整 PowerShell 备用代码](macos-remote-install/SKILL.md)；反馈 GUI 走不通后应直接给终端操作，不继续寻找相同按钮。已有可用连接直接复用。
+Windows 首次接入默认使用实际账户名与非空账户密码，PIN 不等于密码，公钥不是必需步骤。Agent 必须直接给出 [SKILL 主入口的完整管理员 PowerShell 代码](macos-remote-install/SKILL.md)，不再走 GUI 安装路线。一次粘贴完成按需安装、自启、服务启动、22 监听核验和局域网防火墙规则配置。关闭 PowerShell 后由 B 新建连接复测；配置完成不等于远程已接通。已有可用连接直接复用。
 
 正在使用旧版时，保留任务目录；重新导入新版包或获取新版源码快照，让 Agent 重新读取 SKILL 与远程接入参考并记录新版本，再从现有阶段继续。不要覆盖任务记录或为更新 Skill 重装系统。
 
@@ -20,7 +20,7 @@ Windows 首次接入默认使用实际账户名与非空账户密码，PIN 不�
 
 - 标准技能：`macos-remote-install/SKILL.md`。供支持标准 Agent Skills 的客户端加载；安装目录按客户端当前文档，不猜测统一路径。
 - 单文件指南：`AI-GUIDE.md`。可以直接让 Agent 阅读；当只能上传一个文本文件时使用。配套检查脚本仍在完整包内，单文件不会假装它们存在。
-- 同时提供独立的 [WorkBuddy 适配 ZIP](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.1.2.zip)，补齐 WorkBuddy 开放平台文档的展示字段。若当前客户端提供本地技能导入，可选择它；不同版本导入入口可能不同。无法导入时直接用上述读取目录方式，不需要发布到市场。
+- 同时提供独立的 [WorkBuddy 适配 ZIP](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.1.3.zip)，补齐 WorkBuddy 开放平台文档的展示字段。若当前客户端提供本地技能导入，可选择它；不同版本导入入口可能不同。无法导入时直接用上述读取目录方式，不需要发布到市场。
 
 WorkBuddy 官方说明：[技能结构与字段](https://open.workbuddy.cn/docs/skill)。适配 ZIP 只改变入口展示字段，工作流、脚本和参考内容与通用版一致；用户已在 WorkBuddy＋DeepSeek 测到 00 阶段，新版修正仍待该环境复测。
 

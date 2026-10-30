@@ -9,7 +9,8 @@
 | 表现 | 先查什么 | 避免什么 |
 |---|---|---|
 | sshd 不存在 | 是否装了 Server，组件安装是否完成 | 重复启动不存在的服务 |
-| SSH 超时／地址变化 | 现场 IPv4、链路、端口、主机密钥；区分 Windows/macOS | 全网段尝试账户或关闭全部防火墙 |
+| SSH 超时／地址变化 | 当前 IPv4、sshd 自动服务、22 的监听进程与地址、有效入站规则和网络类型、链路；区分 Windows/macOS | 只看 Running、反复安装、关闭全部防火墙或全网段尝试账户 |
+| 关闭终端／重启后 SSH 失联 | 是否用了前台 sshd、服务退出日志、自动启动、当前 IP、睡眠及网卡状态 | 要求一直开着 PowerShell 或承诺端口永远在线 |
 | BIOS 没有 OC | USB/ESP 内容、UEFI 模式、启动路径、注册项 | 把“文件复制成功”当作注册成功 |
 | LoadImage failed / Unsupported | 恢复镜像架构、配对 chunklist、完整性、驱动、OC 日志 | 直接判定 CPU 不支持 |
 | 内核停住／panic | 清晰全图、panic 头部与栈、近期变更、OC/内核日志 | 只凭最后一行随便加 boot-args |

@@ -7,6 +7,7 @@
 - [Agent Skills 规范](https://agentskills.io/specification)
 - [WorkBuddy 技能结构](https://open.workbuddy.cn/docs/skill)
 - [Windows OpenSSH 配置](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse)
+- [Windows 防火墙规则配置与作用域](https://learn.microsoft.com/en-us/powershell/module/netsecurity/set-netfirewallrule)（SSH 配置流程于 2026-10-30 复核）
 - [Windows OpenSSH 认证与服务器配置](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh-server-configuration)
 - [OpenSSH 可选组件安装故障](https://learn.microsoft.com/en-us/troubleshoot/windows-server/system-management-components/cant-install-openssh-features)
 - [Windows 本地空密码远程登录限制](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/accounts-limit-local-account-use-of-blank-passwords-to-console-logon-only)

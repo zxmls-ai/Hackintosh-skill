@@ -13,14 +13,24 @@ SKILL = ROOT / "macos-remote-install"
 sys.path.insert(0, str(SKILL / "scripts"))
 from agentkit import no_link, sha
 
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 REF_NAMES = ["01-remote-access", "02-hardware-routing", "03-storage", "04-installer",
              "05-boot-handoff", "06-postinstall", "07-troubleshooting", "08-state-and-tools",
              "case-14700k-4070ti-super", "sources"]
 SOURCE_DOCS = [SKILL / "SKILL.md"] + [SKILL / "references" / (name + ".md") for name in REF_NAMES]
 TOP_FILES = ["README.md", "START-HERE.md", "AI-GUIDE.md", "LICENSE", ".gitignore",
              "CONTRIBUTING.md", "TEST-FEEDBACK.md", "VALIDATION.md", "PUBLISH.md", "CHANGELOG.md"]
-SCRIPTS = ["agentkit.py", "target_guard.py", "collect-windows.ps1", "collect-macos.sh"]
+SCRIPTS = ["agentkit.py", "target_guard.py", "collect-windows.ps1", "collect-macos.sh", "enable-windows-ssh.ps1"]
+
+
+def sync_ssh_handoff():
+    source = (SKILL / "scripts/enable-windows-ssh.ps1").read_text(encoding="utf-8-sig").rstrip()
+    target = SKILL / "SKILL.md"
+    text = target.read_text(encoding="utf-8")
+    start, end = "<!-- windows-ssh-setup:start -->", "<!-- windows-ssh-setup:end -->"
+    before, rest = text.split(start, 1)
+    _, after = rest.split(end, 1)
+    target.write_text(before + start + "\n```powershell\n" + source + "\n```\n" + end + after, encoding="utf-8")
 
 
 def body(text):
@@ -54,7 +64,7 @@ def workbuddy_skill():
     metadata = {"name": "macos-remote-install", "display_name": "AI 远程安装 OpenCore 与 macOS",
                 "display_name_en": "Remote OpenCore and macOS Installation",
                 "description": "从 B 电脑远程协助 A 电脑安装、排错和验收 macOS 双系统，先核对兼容性、备份与目标身份。",
-                "description_zh": "逐步进度、GUI 人工交接、远程自动检查与可回退修改。",
+                "description_zh": "逐步进度、终端配置 Windows SSH、GUI 安装交接、远程检查与可回退修改。",
                 "description_en": "Guide a separate target PC through compatibility checks, backup, installation and evidence-based validation.",
                 "version": VERSION, "author": "macos-remote-install contributors"}
     front = "---\n" + "\n".join(k + ": " + json.dumps(v, ensure_ascii=False) for k, v in metadata.items()) + "\n---\n\n"
@@ -97,6 +107,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out-dir", type=Path, default=ROOT / "dist")
     a = parser.parse_args()
+    sync_ssh_handoff()
     make_guide()
     (SKILL / "LICENSE").write_bytes((ROOT / "LICENSE").read_bytes())
     paths = source_files()

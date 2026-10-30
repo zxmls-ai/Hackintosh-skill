@@ -2,9 +2,9 @@
 name: macos-remote-install
 description: 从另一台 B 电脑远程协助 A 电脑安装或修复 OpenCore 与 macOS 双系统。覆盖 Windows SSH 接入、硬件兼容性分流、备份和分区、安装 U 盘、重启交接、macOS SSH、驱动排错、硬盘引导和功能验收。适合需要逐步进度反馈及回退记录的安装任务；不承诺所有硬件兼容，也不提供可直接套用的通用 EFI。
 metadata:
-  version: "0.1.2"
+  version: "0.1.3"
   language: zh-CN
-  updated: "2026-10-29"
+  updated: "2026-10-30"
 ---
 
 # 远程安装 OpenCore 与 macOS
@@ -16,56 +16,111 @@ metadata:
 1. 读取已有任务目录的 `state.json`、`journal.jsonl` 和 `NEXT.md`（如果存在），随后核对现场，不能凭记录直接继续写盘。
 2. 检查自身是否能读取本包、在 B 执行程序、联网查项目原始资料、SSH/SFTP 连接 A，以及理解用户反馈的照片。没有相应工具就明确降级到指导模式，不虚构已执行。
 3. 集中询问尚未知的信息：A 当前系统、保留 Windows 与否、期望 macOS 版本或用途、现有备份位置；需要时再索取 A 的当前 IP 和登录方式。不要反复询问已确认事项。凭据通过工具的安全输入或用户指定的本地凭据文件读取，不写入指南或状态文件。
-4. 用户尚未配置远程访问时，先读 [远程接入](references/01-remote-access.md)。Windows 首次接入默认采用账户密码：先确认非空账户密码（不是 Hello PIN）与实际用户名，再安装／启动 OpenSSH Server；GUI 没有服务器入口时按组件状态转管理员 PowerShell，不反复找按钮。已有可用密码或密钥登录直接复用，公钥配置不是必需步骤。不要直接把用户带到分区步骤。
+4. 用户尚未配置远程访问时，先读 [远程接入](references/01-remote-access.md)。Windows 首次接入默认采用账户密码：先确认非空账户密码（不是 Hello PIN）与实际用户名，再安装／启动 OpenSSH Server；阶段 00 的 Windows SSH 安装统一用管理员 PowerShell 整块代码，不再提供可选功能 GUI 路线。已有可用密码或密钥登录直接复用，公钥配置不是必需步骤。不要直接把用户带到分区步骤。
 
-## 00 阶段：发给用户的操作必须可执行
+## 00 阶段：一次粘贴配置 Windows SSH
 
-首次需要用户在 A 安装 SSH 时，**同一条回复同时给出简短 GUI 路线和下面的完整 PowerShell 备用代码**，不能只写“找不到就用终端”或让用户自行读参考文件。这是 GUI 优先的备用入口，不要求两种方法都做。已有可用 SSH 时跳过安装。
+首次需要用户在 A 配置 Windows SSH 时，**只给管理员 PowerShell 操作，不再引导“可选功能”、服务管理器等 GUI 安装路线**。在同一条回复展示下面完整代码，不能只给脚本链接、零散命令或让新手自己组合。已有可用 SSH 时复用；服务已安装但接不通时，这块代码也可用于检查和修复。
 
-GUI 按现场显示的“查看功能／添加功能”识别；“更多 Windows 功能／启用或关闭 Windows 功能”不是 OpenSSH 的安装入口。截图只能证明按钮布局，不能单凭没有“添加”字样就断定系统没有服务器组件。
+对用户这样交接：先确认 A 使用的账户有非空密码（不是 Hello PIN）。在 **A 电脑**开始菜单搜索 **Windows PowerShell**，右键 **以管理员身份运行**，接受提示，将下面整块粘贴并按回车。说明这是安装和配置服务，会写入服务自启与一条 TCP 22 防火墙规则；不要在运行 Agent 的 B 上执行。设置账户密码仍由用户自己完成，不在代码里嵌入密码。
 
-**切换条件：** 用户说找不到按钮、只有客户端、没有服务器、没有 sshd 服务或 GUI 安装失败时，这一轮直接给下面的终端步骤和代码，不再让其返回相同 GUI 搜索。GUI 已报安装错误时先读取错误，再决定是否执行组件安装；PowerShell 不能绕过缺失的组件源。不要提前要求读取尚未生成的主机指纹。
-
-对用户这样交接：在 **A 电脑**开始菜单搜索 **Windows PowerShell**，右键 **以管理员身份运行**，接受系统提示，将下面整块粘贴并按回车。说明这是安装／启动 SSH 服务，不是查询命令；不要在运行 Agent 的 B 上执行。已有账户密码不改，无密码先由用户设置。
-
-<!-- windows-ssh-fallback:start -->
+<!-- windows-ssh-setup:start -->
 ```powershell
 & {
     $ErrorActionPreference = 'Stop'
+    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $isAdmin) { throw '请在 A 电脑以管理员身份打开 Windows PowerShell，再粘贴整块代码。' }
+
+    Write-Host '[1/4] 检查并安装 OpenSSH 服务器……'
     if (-not (Get-Service -Name sshd -ErrorAction SilentlyContinue)) {
         $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
         if ($cap.State -eq 'NotPresent') {
-            Write-Host '正在安装 OpenSSH 服务器，请等待最终结果……'
             $setup = Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
             if ($setup.RestartNeeded) {
-                Write-Warning '组件要求重启。请先告知 Agent，重启后再执行此代码检查。'
+                Write-Warning '组件要求重启，配置尚未完成。请先告知 Agent，重启后重新执行整块代码。'
                 return
             }
             $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
         }
-        if ($cap.State -ne 'Installed') {
-            throw '组件未安装完成或状态未知，请把输出发给 Agent。'
-        }
+        if ($cap.State -ne 'Installed') { throw '组件状态不是 Installed，请把完整输出发给 Agent。' }
     }
     if (-not (Get-Service -Name sshd -ErrorAction SilentlyContinue)) {
-        throw '组件显示已安装但没有 sshd 服务，请把输出发给 Agent。'
+        throw '组件已安装但没有 sshd 服务，请把完整输出发给 Agent。'
     }
+
+    Write-Host '[2/4] 设置开机自启并启动 Windows SSH 服务……'
     Set-Service -Name sshd -StartupType Automatic
     Start-Service -Name sshd
-    Get-Service -Name sshd
+    $listen = @()
+    for ($attempt = 0; $attempt -lt 15; $attempt++) {
+        $svc = Get-CimInstance -ClassName Win32_Service -Filter "Name='sshd'"
+        $lan = @(Get-NetIPAddress -AddressFamily IPv4 | Where-Object {
+            $_.AddressState -eq 'Preferred' -and $_.IPAddress -notmatch '^(127\.|169\.254\.)'
+        })
+        $listen = @(Get-NetTCPConnection -State Listen -LocalPort 22 -ErrorAction SilentlyContinue | Where-Object {
+            $_.OwningProcess -eq $svc.ProcessId -and
+            ($_.LocalAddress -in @('0.0.0.0', '::') -or $_.LocalAddress -in $lan.IPAddress)
+        })
+        if ($svc.State -eq 'Running' -and $svc.StartMode -eq 'Auto' -and $listen.Count -gt 0) { break }
+        Start-Sleep -Seconds 1
+    }
+    if ($svc.State -ne 'Running' -or $svc.StartMode -ne 'Auto' -or $listen.Count -eq 0) {
+        $svc | Select-Object Name,State,StartMode,ProcessId | Format-Table -AutoSize
+        Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object {
+            $_.LocalPort -eq 22 -or ($svc.ProcessId -gt 0 -and $_.OwningProcess -eq $svc.ProcessId)
+        } | Select-Object LocalAddress,LocalPort,OwningProcess | Format-Table -AutoSize
+        throw 'sshd 尚未以自动服务监听可远程访问的 TCP 22。请把输出发给 Agent，检查服务日志、Port/ListenAddress 和端口占用；不自动覆盖已有配置。'
+    }
+
+    if ($lan.Count -eq 0) { throw '没有可用的网卡 IPv4，请先检查网线、Wi-Fi 或 DHCP，再重新执行。' }
+    Write-Host '[3/4] 创建或修复 TCP 22 的局域网入站规则……'
+    $ruleName = 'Hackintosh-Skill-SSH-In-TCP'
+    $ruleOptions = @{
+        Name=$ruleName; PolicyStore='PersistentStore'; Enabled='True'
+        Direction='Inbound'; Action='Allow'; Profile='Any'; Protocol='TCP'
+        LocalPort=22; RemoteAddress='LocalSubnet'; Service='sshd'
+    }
+    if (Get-NetFirewallRule -PolicyStore PersistentStore -Name $ruleName -ErrorAction SilentlyContinue) {
+        Set-NetFirewallRule @ruleOptions
+    } else {
+        New-NetFirewallRule @ruleOptions -DisplayName 'Hackintosh Skill - Windows SSH (LAN)' | Out-Null
+    }
+    $rule = Get-NetFirewallRule -PolicyStore ActiveStore -Name $ruleName
+    $port = Get-NetFirewallPortFilter -AssociatedNetFirewallRule $rule
+    $address = Get-NetFirewallAddressFilter -AssociatedNetFirewallRule $rule
+    if ($rule.Enabled -ne 'True' -or $rule.Direction -ne 'Inbound' -or $rule.Action -ne 'Allow' -or
+        $rule.Profile -ne 'Any' -or $port.Protocol -notin @('TCP','6') -or
+        $port.LocalPort -ne '22' -or $address.RemoteAddress -notcontains 'LocalSubnet') {
+        throw '防火墙规则核验未通过，请把输出发给 Agent；不要关闭整个防火墙。'
+    }
+
+    Write-Host '[4/4] 本机检查通过。可以关闭此窗口；接下来由 B 验证实际 SSH 登录。'
+    $svc | Select-Object Name,State,StartMode,ProcessId | Format-Table -AutoSize
+    $listen | Select-Object LocalAddress,LocalPort,OwningProcess | Format-Table -AutoSize
+    $rule | Select-Object Name,Enabled,Direction,Action,Profile | Format-Table -AutoSize
+    Get-NetFirewallProfile -PolicyStore ActiveStore | Select-Object Name,Enabled,AllowInboundRules,AllowLocalFirewallRules | Format-Table -AutoSize
+    Write-Host 'A 的当前 IPv4（多网卡时让 Agent 选择与 B 可达的地址）：'
+    $lan | Select-Object InterfaceAlias,IPAddress | Format-Table -AutoSize
+    Write-Host '当前账户：'
+    whoami.exe
+    Write-Host '重启后服务会自动启动，但睡眠/关机、IP 变化、网卡故障或组织策略仍会影响连接。'
 }
 ```
-<!-- windows-ssh-fallback:end -->
+<!-- windows-ssh-setup:end -->
 
-告诉用户成功时应看到 `sshd` 为 `Running`，将最终结果或报错原文发回。代码遇到错误会停止；等待安装结束，不能因暂无输出就重复执行。它不自动重启、不改密码、不配置密钥、不关闭防火墙，也不证明远程已接通。
+上面的代码由 `scripts/enable-windows-ssh.ps1` 同步生成，作为可直接粘贴的交接内容。它检查管理员权限、按需安装服务、设置自动启动、立即启动、最多等待 15 秒核对监听进程，然后创建或修复本技能自己的持久防火墙规则。新规则在所有网络配置文件生效，允许本地子网访问 TCP 22，避免 DHCP 更换 B 的地址或 A 被识别为公用网络后失联；不改其他规则、不改账户、不改已有 sshd 配置、不自动重启电脑。跨子网／VPN 按 B 的真实来源单独适配，不直接扩大成任意来源。
 
-**下一轮按结果推进：** Running 后再给 IP／用户名与主机指纹获取步骤，由 B 实测端口和认证；超时则按 [远程接入](references/01-remote-access.md) 检查监听和防火墙，缺少规则时给出仅用于 SSH、限定 B 来源的具体修复。安装失败按错误码排查组件源，不重复启动不存在的服务。仅凭 AUTH_FAILED 不能断言用户填了 PIN，需检查用户名、密码、账户限制及服务器认证设置。
+**成功判据：** 显示 `[4/4] 本机检查通过`，服务 `Running / Auto`，22 端口的进程属于 sshd，监听地址不是仅本机回环，防火墙规则为 `Enabled / Inbound / Allow / Any`。这只证明本机配置检查通过，不能替代 B 的连通与认证实测。安装需要重启或任一步报错时配置未完成，读取具体结果后处理；不要在下载中重复粘贴，也不要继续启动不存在的服务。
 
-**发送交接前自查：** 尚未接通时，这条回复是否给出了用户现在能执行的操作、在 A/B 哪一台执行、应看到什么、失败时返回什么？已知 GUI 走不通却没有终端代码时，先补全再发送。不要用等待 IP 或硬件资料代替解决当前 SSH 安装阻塞。
+**后续交接：** 让用户提供输出中的当前 IPv4、实际用户名；服务启动生成主机密钥后再核验指纹。B 实测 TCP 22、SSH 身份与 SFTP；关闭 A 的 PowerShell 窗口后另开一条 SSH 连接复测。服务由 Windows 管理，不依赖这个窗口。获得合适重启时机后再复测自启并核对当前 IP，未做重启就标注“自启已配置，重启实测未完成”，不强制为接入验收额外重启。
+
+**仍超时：** 按 [远程接入](references/01-remote-access.md) 分别检查本机监听、当前 IP／网卡、有效防火墙与组织策略、B 到 A 的链路。不要把所有超时解释成安装失败；不要重复安装服务或让窗口一直开着。休眠、关机、网卡故障、IP 变化和拦截策略不由服务自启解决，不能承诺“22 永远在线”。
+
+**发送前自查：** 是否写明在 A 执行、给了完整代码、预期结果和报错反馈方式？阶段 00 不再受“人工步骤 GUI 优先”约束；后续 BIOS、安装器和 macOS 共享设置仍可使用 GUI。
 
 ## 工作方式
 
-- 人工操作优先 GUI。Agent 在 SSH 后可用脚本自动完成实际操作，不把长命令交给新手逐条输入。
+- 除阶段 00 的 Windows SSH 统一使用管理员 PowerShell 外，人工操作优先 GUI。Agent 在 SSH 后可用脚本自动完成实际操作，不把长命令交给新手逐条输入。
 - 每个阶段开始、关键结果出现和需要人工操作时，说明「当前阶段／已完成／正在做／下一步／需要用户操作」。持续工作约 60 秒无消息时给有信息的更新；长任务让执行工具返回任务 ID，避免堵塞对话。没有数据时不用虚构百分比。
 - 初始规划要区分 `fresh-install`（用户明确要重装）、`repair`（保留已有系统）和 `inspect`（只检查）。发现已有 APFS/macOS 时先核对意图，不能自动清除后重新安装。
 - 可逆且已授权的读取、下载、备份和检查持续完成。格式化、删除分区、重分区，以及将影响工作会话的重启，需要与用户已明确批准的对象和时机一致；不要用「同意安装」推定「同意清空整盘」。先完成可以审阅的方案和备份核验，再确认实际破坏性动作。

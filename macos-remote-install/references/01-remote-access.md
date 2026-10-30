@@ -25,55 +25,34 @@
 
 密码通过客户端凭据输入或用户指定的本地凭据文件交给 B；Agent 可以在内部读取并调用支持密码的 SSH 库／连接器，不回显内容、不把密码放在进程参数里。不要把“不要将密码写进聊天或日志”误读成“只能使用公钥”。
 
-### 00-2 安装或确认 OpenSSH 服务器
+### 00-2 统一使用管理员 PowerShell
 
-用户已反馈 GUI 无法完成时，直接向用户展示 [SKILL 主入口](../SKILL.md) 的完整 PowerShell 备用代码和打开管理员 PowerShell 的步骤；不能只给文档链接或再次要求寻找“添加功能”。首次安装交接也同时附备用代码。以下分流供 Agent 理解输出和排错，不应让新手自己组合零散命令。
+直接向用户展示 [SKILL 主入口](../SKILL.md) 的完整配置代码，并说明在 A 搜索 Windows PowerShell、右键以管理员身份运行、粘贴整块并回车。阶段 00 不再走可选功能／services.msc，也不把“GUI 优先”套用到这一步。代码源为 `scripts/enable-windows-ssh.ps1`；Windows PowerShell 5.1 的脚本文件使用 UTF-8 BOM。
 
-图形入口优先，但不把固定菜单路径当成所有 Windows 的共同前提。Windows 10/11 的“可选功能”可能位于“应用”或“系统”，也可能被精简、受策略限制，或服务器已经安装而不再显示在添加列表。
-
-- 开始菜单搜索“可选功能”，按现场的“查看功能／添加功能”进入并检查安装状态，目标是 **OpenSSH Server／OpenSSH 服务器**；不能要求按钮必须叫“添加功能”。“更多 Windows 功能”是不同入口，不去那里找 SSH。只看到 Client／客户端不等于服务器已安装。
-- 找到服务器就安装；找不到、安装失败或不确定状态时，立即转到下面的短命令检测，不让用户反复寻找不存在的按钮。
-- 在 **A 本机**搜索“Windows PowerShell”，右键“以管理员身份运行”。先只执行检测：
-
-```powershell
-Get-Service -Name sshd -ErrorAction SilentlyContinue
-Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' -ErrorAction Stop
-```
-
-按输出分流：
+脚本依次显示四步进度：安装检查 → 自动启动和监听检查 → 防火墙配置 → 本机结果。实际改动仅限安装缺失的 OpenSSH Server、sshd 启动类型与启动操作、名为 `Hackintosh-Skill-SSH-In-TCP` 的专用入站规则。已安装服务不叠装，已有会话不主动重启，用户名／密码与 sshd_config 不自动修改。[微软服务安装与自启说明](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse)
 
 | 结果 | 下一步 |
 |---|---|
-| 已存在 sshd 服务 | 检查其安装来源与运行状态，直接进入启动／验证；不要叠装第二套 OpenSSH |
-| 无 sshd，Server 状态 NotPresent | 执行下面的安装命令，等待最终输出 |
-| 状态 Installed，但无 sshd | 安装／服务异常，读取具体错误和系统状态；不反复执行 Start-Service |
-| 查询无结果或报错，或出现其他状态 | 获取 winver 的版本／build 与完整错误；检查组件源、精简系统、策略及待重启状态，不自动视为 NotPresent |
+| 无 sshd，Server 状态 NotPresent | 脚本安装组件，重新检查状态，继续配置 |
+| 已存在 sshd 服务 | 直接配置自启与检查实际监听，不安装第二套 |
+| RestartNeeded=True | 当前配置未完成；记录后安排重启，再运行整块 |
+| Installed 但无服务／状态未知／安装报错 | 停止并读取错误，不反复 Start-Service |
+| 服务运行但只有其他端口、回环地址或 22 被其他进程占用 | 输出服务与端口信息；Agent 查实际配置、日志和占用，不覆盖用户已有 SSH 配置 |
+| 防火墙写入／读回失败 | 当前配置未通过，检查管理员权限、有效策略与错误，不关闭防火墙 |
 
-仅在确定未安装且在线组件可用时执行：
+安装进度不是安装完成。遇到 0x800f0954、0x800f081f 等错误或长时间无进展，保留错误并检查 Windows Update／WSUS／FoD 来源，不承诺终端命令必定成功。按[微软故障说明](https://learn.microsoft.com/en-us/troubleshoot/windows-server/system-management-components/cant-install-openssh-features)选择匹配版本的源；组件途径不可用时，再评估微软维护的 [Win32-OpenSSH 发布包](https://github.com/PowerShell/Win32-OpenSSH/releases)，核对架构、版本及安装说明。不要混装、关闭组织策略或下载不明整合包。
 
-```powershell
-Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' -ErrorAction Stop
-```
+### 00-3 验证服务、监听与防火墙持久配置
 
-看到下载进度不是安装完成。安装结束后重新检查组件状态与 sshd 服务；若 `RestartNeeded` 为 True，保存阶段状态并安排用户重启，再验证。安装失败不继续执行服务启动命令。[微软安装说明](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse)
+- `Set-Service -StartupType Automatic` 让服务随 Windows 启动；`Start-Service` 立即启动。不要手工运行 `sshd.exe -D` 或依靠终端后台作业替代 Windows 服务。关闭 PowerShell 不会结束正常的 sshd 服务。
+- 必须核对 22 的 `OwningProcess` 等于 sshd 服务进程，并且绑定通配地址或当前网卡 IPv4；不能仅看服务 Running 或任意进程占用了 22。旧服务若使用自定义端口，按实际意图适配监听与防火墙，不能强行抢占 22。
+- 脚本写入 `PersistentStore`，再从 `ActiveStore` 读取专用规则并检查方向、动作、端口与地址范围。规则使用 `Profile Any` 和 `RemoteAddress LocalSubnet`，支持公用／专用／域网络与同子网 DHCP 地址变化。原有其他规则不被改动，因此也不能声称整个系统只开放了本地子网。[防火墙规则参数](https://learn.microsoft.com/en-us/powershell/module/netsecurity/set-netfirewallrule)
+- 跨网段或 VPN 场景需要 Agent 将规则来源适配为 B 的实际地址／授权网段；本地子网规则不保证跨网段连接。显式阻止规则、组织禁止本地规则合并、第三方防火墙、AP 隔离等也可能阻止访问；不能把一条 Allow 规则读回成功当作链路可通。
+- 结果输出当前 IPv4 与 `whoami`，由 B 选择可达地址并验证。多网卡、169.254 自动地址、VPN 或默认路由异常先查现场；不要沿用旧 IP。服务自启不固定 IP，需要时可指导用户在路由器给对应网卡做 DHCP 地址保留。
 
-遇到 0x800f0954、0x800f081f 等错误或长时间无进展，保留错误码并检查 Windows Update／WSUS／FoD 来源，不承诺终端命令必定成功。按[微软故障说明](https://learn.microsoft.com/en-us/troubleshoot/windows-server/system-management-components/cant-install-openssh-features)选择匹配系统版本的 FoD 源；系统组件途径不可用时，再评估微软维护的 [Win32-OpenSSH 发布包](https://github.com/PowerShell/Win32-OpenSSH/releases)，核对架构、版本及该包的安装说明。不要混装两种来源、关闭组织策略或下载不明整合包。
+若用户报告“关闭窗口后就断了”，先区分是手工前台 sshd、服务崩溃，还是随后睡眠／断网／IP 变化，不让用户靠保持终端开启来维持连接。若运行中的服务确实反复退出，收集 OpenSSH Operational 和 System 服务控制管理器日志，修复具体原因后再评估服务恢复动作，不用无限重启掩盖错误。
 
-### 00-3 启动服务并检查网络
-
-确认服务存在后，可在 A 的“服务”中将 **OpenSSH SSH Server** 设为“自动”并启动。已经打开管理员 PowerShell 时也可用：
-
-```powershell
-Set-Service -Name sshd -StartupType Automatic -ErrorAction Stop
-Start-Service -Name sshd -ErrorAction Stop
-Get-Service -Name sshd
-Get-NetTCPConnection -State Listen -LocalPort 22 -ErrorAction SilentlyContinue
-Get-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -ErrorAction SilentlyContinue
-```
-
-状态应为 Running，并确认 sshd 实际监听端口（默认 22，自定义配置按实际端口）。安装一般会创建入站规则；规则不存在、禁用或与当前网络配置不匹配时，先记录现状，按实际需要创建／调整仅用于 SSH 的规则，来源限定 B 的地址，不关闭整个防火墙，不覆盖无关规则。上述命令只检查规则，不会自动修复缺失规则。
-
-A 在“设置→网络和 Internet”查看当前有线 IPv4，或用 `ipconfig`。B 检查到这个地址的实际 SSH 端口，随后尝试认证；端口可达不算 SSH 登录成功。
+关闭 A 上的 PowerShell 后，B 重新建立独立 SSH 会话并验证身份。后续经用户安排的重启后，再检查新地址、主机密钥、自启和独立登录；没有重启实测时如实记录未测。`Running/Auto` 不代表电脑睡眠或关机时也能响应。
 
 ### 00-4 用密码完成真实连接
 
