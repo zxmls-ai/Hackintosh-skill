@@ -13,7 +13,18 @@
       },
       "allowed_phases": [
         "00-remote",
-        "01-hardware"
+        "01-hardware",
+        "02-storage",
+        "03-media",
+        "04-install"
+      ],
+      "allowed_review_phases": [
+        "01-hardware",
+        "02-storage",
+        "03-media"
+      ],
+      "rewind_phases": [
+        "04-install"
       ]
     },
     "0.2.1": {
@@ -29,7 +40,45 @@
       },
       "allowed_phases": [
         "00-remote",
-        "01-hardware"
+        "01-hardware",
+        "02-storage",
+        "03-media",
+        "04-install"
+      ],
+      "allowed_review_phases": [
+        "01-hardware",
+        "02-storage",
+        "03-media"
+      ],
+      "rewind_phases": [
+        "04-install"
+      ]
+    },
+    "0.2.2": {
+      "sources": {
+        "workflow.py": "a5708c8a407a4c9ca7008baa6aec1fc9da10f137e8f4080193cca781ea72e4cf",
+        "ssh_transport.py": "71a441e14dc6a4e130322e764e4bf37f9c21b23f1d9b4f2126c3e4debe5a2433",
+        "probe-windows.ps1": "94b14954f96674d821250f47bcd23f06f1c06b67adc7d28b7509f64ca4f6d75f",
+        "enable-windows-ssh.ps1": "799bc26434b424f4cbdb894f0ae77cccb00731496dceffe1e3eddd04171c97b9",
+        "prepare_ssh_handoff.py": "c0501af412042320a883a22b45638221f3e7a527b351d93ef0e5369bc8d7071f",
+        "agentkit.py": "16186ae8ed3ed2efb0a967b850426588692dd28c218d4e2d28ed528812a02cdc",
+        "workflow.json": "e2788ff2838fad8155c24616e0bcc65f77a5599c1046e981c4d6c6b87eb3abf0",
+        "upgrades.json": "d8dc97f63517acd1f357e7b8b1ef1b5e4c21db87391255c431d862ec66ee58c3"
+      },
+      "allowed_phases": [
+        "00-remote",
+        "01-hardware",
+        "02-storage",
+        "03-media",
+        "04-install"
+      ],
+      "allowed_review_phases": [
+        "01-hardware",
+        "02-storage",
+        "03-media"
+      ],
+      "rewind_phases": [
+        "04-install"
       ]
     }
   }

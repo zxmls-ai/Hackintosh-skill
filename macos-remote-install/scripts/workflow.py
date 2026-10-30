@@ -15,14 +15,15 @@ import uuid
 from agentkit import confined, init_run, no_link, read_json, sha, utc
 from prepare_ssh_handoff import render, SOURCE
 from ssh_transport import Fault, parse_packet, verify_connection, credential_from_bundle
+from acpi_guard import check_acpi_evidence
 
-VERSION = '0.2.2'
+VERSION = '0.2.3'
 ROOT = Path(__file__).resolve().parent
 CONTRACT_PATH = ROOT.parent / 'workflow.json'
 UPGRADE_PATH = ROOT.parent / 'upgrades.json'
 CONTRACT = read_json(CONTRACT_PATH)
 PHASES = {p['id']:p for p in CONTRACT['phases']}
-TRACKED = ['workflow.py','ssh_transport.py','probe-windows.ps1','enable-windows-ssh.ps1','prepare_ssh_handoff.py','agentkit.py']
+TRACKED = ['workflow.py','ssh_transport.py','probe-windows.ps1','enable-windows-ssh.ps1','prepare_ssh_handoff.py','agentkit.py','acpi_guard.py']
 
 # code -> summary, diagnostic action, human input, fixed resume action
 ERRORS = {
@@ -55,6 +56,8 @@ ERRORS = {
     'STATE_INVALID': ('任务状态不完整','保留原文件，检查最后一条记录，不重新建同名任务','暂时无需操作','status'),
     'ACTION_NOT_ALLOWED': ('当前步骤不接受此操作','读取 status 的 next_action 并按顺序执行','无需操作','status'),
     'CONTRACT_REPORT_INVALID': ('阶段报告不符合当前合同','按返回的检查项补全真实证据后重交 review；不要伪造通过','无需操作','review'),
+    'ACPI_EVIDENCE_INVALID': ('本机 ACPI 文件或适配证据未通过','留在 03，补齐原始表、来源、配置及补丁校验；不要安排安装启动','默认由 Agent 在 Windows 中准备 Python 并采集；免 Python 重启采集为可选路线','review'),
+    'EFI_DIAGNOSTICS_INVALID': ('首次启动的文件日志未配置','留在 03，备份后启用 OC 文件日志与 AppleDebug，更新配置证据再 review','无需操作','review'),
     'GUIDED_FAILURE': ('当前阶段遇到需要诊断的问题','按当前阶段收集证据，提交诊断方案','仅在确需现场信息时反馈','diagnose'),
     'EVIDENCE_CHANGED': ('验收证据已变化或缺失','重新核对当前步骤；原完成状态不可沿用','暂时无需操作','status'),
     'INTERNAL_ERROR': ('遇到未覆盖的执行错误','记录错误类别与复现条件，进入标准诊断流程','暂时无需操作','diagnose')
@@ -184,10 +187,22 @@ def upgrade(run,state):
         return
     previous=state.get('version')
     profile=read_json(UPGRADE_PATH)['from'].get(previous)
-    if not profile or state['sources']!=profile['sources'] or state['phase'] not in profile['allowed_phases'] or state['status']=='running' or state.get('guided_reviews'):
+    reviews=state.get('guided_reviews',[])
+    if not profile or state['sources']!=profile['sources'] or state['phase'] not in profile['allowed_phases'] or state['status']=='running':
         raise Fault('UPGRADE_UNSUPPORTED')
+    allowed=set(profile.get('allowed_review_phases',[]))
+    if any(r['phase'] not in allowed for r in reviews):
+        raise Fault('UPGRADE_UNSUPPORTED')
+    for r in reviews:
+        verify_evidence(run,r['report'])
+        for p in r['proofs']: verify_evidence(run,p)
     backup=evidence(run,'before-workflow-upgrade',state)
     state.update(version=VERSION,sources=current)
+    if state['phase'] in profile.get('rewind_phases',[]):
+        # Preserve completed work as history; supersede only the old media review.
+        state.setdefault('superseded_guided_reviews',[]).extend(r for r in reviews if r['phase']=='03-media')
+        state['guided_reviews']=[r for r in reviews if r['phase']!='03-media']
+        state.update(phase='03-media',step='guided-contract',status='planned',failure=None)
     state.setdefault('upgrades',[]).append({'from':previous,'to':VERSION,'backup':backup})
     save(run,state,f'upgrade-{previous}-to-{VERSION}')
 
@@ -412,6 +427,11 @@ def guided_review(run, state, report_path):
     if report.get('phase') != state['phase'] or set(report.get('checks',{})) != set(contract['verification']):
         raise Fault('CONTRACT_REPORT_INVALID')
     proofs = []
+    if state['phase']=='03-media':
+        check=report['checks']['acpi_tables']
+        if check.get('result')!='pass' or not isinstance(check.get('manifest'),str):
+            raise Fault('ACPI_EVIDENCE_INVALID')
+        proofs.extend(check_acpi_evidence(run,state.get('machine_a'),check['manifest']))
     limited = False
     for name in contract['verification']:
         check = report['checks'][name]
@@ -452,6 +472,10 @@ def render_result(state, override=None):
             result.update(next_action='correct-input-then-import')
         elif code=='CONTRACT_REPORT_INVALID':
             result.update(next_action='correct-report-then-review',contract=contract)
+        elif code=='ACPI_EVIDENCE_INVALID':
+            result.update(next_action='collect-acpi-then-review',contract=contract)
+        elif code=='EFI_DIAGNOSTICS_INVALID':
+            result.update(next_action='correct-efi-then-review',contract=contract)
         elif code=='SOURCE_CHANGED':
             result.update(next_action='upgrade')
     elif state['step'] == 'prepare':
@@ -477,6 +501,8 @@ def render_result(state, override=None):
         summary = '00 接入验证通过' if phase == '01-hardware' else '上一阶段检查记录已接收'
         lines = [f'进度：{phase[:2]} {contract["title"]}｜{summary}',f'下一步：按本阶段合同执行：{contract["actions"][0]}','需要你：自动检查先继续，仅收集本阶段确实缺少的信息']
         result.update(next_action='guided-contract',contract=contract)
+        if phase=='03-media':
+            lines[2]='需要你：默认自动准备 Python 并采集；可选回复“免 Python 方案”，需额外启动 OpenCore 后回 Windows；U 盘按需插入'
     if state.get('status') == 'running':
         result['next_action'] = 'resume'
         lines = ['进度：00 远程接入｜上次验证未结束，结果尚未确认','下一步：确认旧进程结束后运行 resume，重跑验收','需要你：无需操作']

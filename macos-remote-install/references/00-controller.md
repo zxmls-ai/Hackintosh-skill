@@ -38,6 +38,8 @@ python scripts/workflow.py --run "B上的私有任务目录" --json status
 | diagnose | 使用诊断流程，不能盲目反复 verify |
 | repair-result | 在已有授权内执行已审阅方案并记录结果；必要的现场动作／新授权合并交接 |
 | resume | 确认上次进程已结束，调用 resume 后重跑验收 |
+| collect-acpi-then-review | 留在 03，按介质参考补齐真实原始表、配置与适配清单，再提交 review；不能以文字声明通过 |
+| correct-efi-then-review | 留在 03，备份并修正首次启动的日志设置，更新 EFI 哈希与清单后重交；不重新分区 |
 | guided-contract | 加载返回的阶段合同和对应参考，连续完成已授权操作，提交 review |
 | none | 交付结果与已知限制 |
 
@@ -118,7 +120,7 @@ python scripts/workflow.py --run "任务目录" --json repair-result --file "处
 
 进度写在 `workflow-state.json`，事件在 `workflow-events.jsonl`；`state.json` 只是兼容投影。`agentkit checkpoint` 拒绝修改受控任务的阶段。程序锁防止两个进程同时推进，进程退出后锁自动释放。
 
-操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，不能直接手改 sources 解锁。v0.2.2 登记了 v0.2.0／v0.2.1 的源哈希，00 或刚完成 00 且未提交后续审核的任务，可用新版的 `upgrade` 备份迁移；正在运行、未知版本或修改过的源哈希会拒绝。阶段、身份、连接信息、失败计数和证据保留，不重新安装 SSH。
+操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，不能直接手改 sources 解锁。v0.2.3 登记了 v0.2.0～v0.2.2 的源哈希，00～04 的任务可用新版 `upgrade` 备份迁移；保留已经核验的 01／02 记录。旧任务已进 04 时，将旧 03 审核留作历史并回到 03 补验，不据此重做分区／格式化或中止正在进行的安装；正在运行、未知版本或修改过的源哈希会拒绝。阶段、身份、连接信息、失败计数和证据保留，不重新安装 SSH。
 
 ```text
 python scripts/workflow.py --run "原任务目录" --json upgrade
@@ -138,6 +140,8 @@ python scripts/workflow.py --run "任务目录" --json recheck
 ## 01～08 的统一合同
 
 完整规则位于 [workflow.json](../workflow.json)：每阶段含输入、前置条件、标准动作、检查项、异常入口、恢复位置和唯一下一阶段。阶段 01 的实机工作从固定硬件采集开始，不需要让用户先回复“继续”。
+
+03 额外有文件级门槛：`acpi_tables` 必须为 pass 且指定 `manifest`（相对任务目录的 `acpi-evidence-v1` JSON）；控制器检查 DSDT/SSDT 文件的结构、长度、校验和与哈希，核对目标 UUID、当前配置、启用的 ACPI 文件及适配记录。文字声明或空文件不能通过；`accepted-limit` 不能绕过这个门槛。`firmware_config_review` 仍需实际配置与固件依据，不能把读到表等同于 Booter 配置正确。具体格式见介质参考。
 
 这些阶段的操作还不是完整自动执行器。Agent 依合同与对应参考工作，保存原始工具输出／人工观察／来源资料。完成当前合同后，按返回的 `verification` 名称提交报告：
 

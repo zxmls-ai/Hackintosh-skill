@@ -28,6 +28,8 @@
 
 ## 明确未解决／未完成验证
 
+2026-10-30 的新版流程实测补充（维护方只读核对）：恢复启动照片停在 EXITBS:START。U 盘实际使用 REL 构建，config 开启 SysReport，但盘上没有该报告；日志 Target=3、AppleDebug=false，未留下 OC 日志文件。只有一份 EC/USBX 补丁，不能把它视作本机 DSDT 已采集。与此前成功备份相比，SetupVirtualMap 由 true 变为 false，DummyPowerManagement 也由 true 变为 false；这些是对照线索，不是已证明的卡死根因或其他机器的推荐值。新流程须先采集原始表并配置日志、审查适配依据，再做一次一个变量的启动测试。本次未修改该电脑的 EFI 或安排验证启动。
+
 - 窗口失去焦点时出现黑块；原生截图也可见。透明度／输出方式试验未形成明确修复结论。
 - iPhone→Mac 的 Safari 接力和剪贴板曾恢复；Mac→iPhone 曾失败。没有后续证据证明双向全好。
 - 短睡眠唤醒曾正常，后续较长睡眠出现后台唤醒后黑屏再睡。

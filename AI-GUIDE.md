@@ -1,6 +1,6 @@
 # AI 远程协助安装 OpenCore 与 macOS：完整指南
 
-版本 0.2.2。此文件由 SKILL.md 与 references 合并生成。
+版本 0.2.3。此文件由 SKILL.md 与 references 合并生成。
 
 Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚本需取得完整仓库。没有工具时必须如实降级，不得编造执行结果。
 
@@ -31,6 +31,8 @@ Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚�
 本 Skill 定位为固定流程、AI 处理异常的安装工具。B 能执行 Python 时，先读取 [标准流程控制器](#section-00-controller)，运行 `python scripts/workflow.py --run "私有任务目录" --json init`；已有受控任务用 `status`。**正常流程根据 `next_action` 执行，向用户输出 `display`，不要重新编排步骤或手改任务状态。阶段 00 使用现成连接器，不另写一个替代验收；01～08 合同模式可用已核验身份的 SSH/SFTP 工具执行对应参考中的动作。** 文件路径与命令在 B 处理，不让用户逐条执行。
 
 阶段 00 已由程序实际验证 SSH、主机密钥、机器身份、管理员权限和文件传输，全部通过才推进。01～08 的统一合同在 [workflow.json](macos-remote-install/workflow.json)，当前仍由 Agent 按合同执行并提交有证据的审核结果，不能宣称全部阶段已自动验收。正常分支使用固定脚本，异常分支按错误码 `recover`；未覆盖问题使用 `diagnose → repair-result → 原步骤重验`。
+
+**阶段 03 的固定前置条件：** 默认复用有效本机 ACPI；缺少时由 Agent 在 A 准备 Python 与原作者工具，通过 SSH 在 Windows 中采集，不为了避免安装依赖而默认增加重启。只在用户选择“免 Python 方案”或默认路线经诊断仍不可用并得到用户选择时，用 OpenCore DEBUG 的 SysReport 采集。采集启动必须停在 OC 菜单后回 Windows，不交接“选择 macOS 恢复”。`review` 必须提交并通过实际 ACPI 表／配置／适配证据检查，详情见 [介质前置检查](#section-04-installer)。阶段 03 未过不得安排安装启动；下载、已授权的介质准备和明确标注的诊断启动可在此前进行。
 
 用户只需一次 A 端配置与结果回传；已有完整可信结果直接导入，已有凭据直接使用。B 的 Python／工具不可用时明确标为“人工指导模式”，按下面参考执行，不伪造控制器输出。用户未要求切换模式时，不因为某个检查失败而绕过程序改用自由操作。
 
@@ -320,6 +322,8 @@ python scripts/workflow.py --run "B上的私有任务目录" --json status
 | diagnose | 使用诊断流程，不能盲目反复 verify |
 | repair-result | 在已有授权内执行已审阅方案并记录结果；必要的现场动作／新授权合并交接 |
 | resume | 确认上次进程已结束，调用 resume 后重跑验收 |
+| collect-acpi-then-review | 留在 03，按介质参考补齐真实原始表、配置与适配清单，再提交 review；不能以文字声明通过 |
+| correct-efi-then-review | 留在 03，备份并修正首次启动的日志设置，更新 EFI 哈希与清单后重交；不重新分区 |
 | guided-contract | 加载返回的阶段合同和对应参考，连续完成已授权操作，提交 review |
 | none | 交付结果与已知限制 |
 
@@ -400,7 +404,7 @@ python scripts/workflow.py --run "任务目录" --json repair-result --file "处
 
 进度写在 `workflow-state.json`，事件在 `workflow-events.jsonl`；`state.json` 只是兼容投影。`agentkit checkpoint` 拒绝修改受控任务的阶段。程序锁防止两个进程同时推进，进程退出后锁自动释放。
 
-操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，不能直接手改 sources 解锁。v0.2.2 登记了 v0.2.0／v0.2.1 的源哈希，00 或刚完成 00 且未提交后续审核的任务，可用新版的 `upgrade` 备份迁移；正在运行、未知版本或修改过的源哈希会拒绝。阶段、身份、连接信息、失败计数和证据保留，不重新安装 SSH。
+操作开始前记录 running。Agent／网络中断后先 status；未完成的操作运行 resume 后重验，不凭此前正在执行的提示认定成功。源文件哈希改变时拒绝静默续跑；保留固定仓库快照，不能直接手改 sources 解锁。v0.2.3 登记了 v0.2.0～v0.2.2 的源哈希，00～04 的任务可用新版 `upgrade` 备份迁移；保留已经核验的 01／02 记录。旧任务已进 04 时，将旧 03 审核留作历史并回到 03 补验，不据此重做分区／格式化或中止正在进行的安装；正在运行、未知版本或修改过的源哈希会拒绝。阶段、身份、连接信息、失败计数和证据保留，不重新安装 SSH。
 
 ```text
 python scripts/workflow.py --run "原任务目录" --json upgrade
@@ -420,6 +424,8 @@ python scripts/workflow.py --run "任务目录" --json recheck
 ## 01～08 的统一合同
 
 完整规则位于 [workflow.json](macos-remote-install/workflow.json)：每阶段含输入、前置条件、标准动作、检查项、异常入口、恢复位置和唯一下一阶段。阶段 01 的实机工作从固定硬件采集开始，不需要让用户先回复“继续”。
+
+03 额外有文件级门槛：`acpi_tables` 必须为 pass 且指定 `manifest`（相对任务目录的 `acpi-evidence-v1` JSON）；控制器检查 DSDT/SSDT 文件的结构、长度、校验和与哈希，核对目标 UUID、当前配置、启用的 ACPI 文件及适配记录。文字声明或空文件不能通过；`accepted-limit` 不能绕过这个门槛。`firmware_config_review` 仍需实际配置与固件依据，不能把读到表等同于 Booter 配置正确。具体格式见介质参考。
 
 这些阶段的操作还不是完整自动执行器。Agent 依合同与对应参考工作，保存原始工具输出／人工观察／来源资料。完成当前合同后，按返回的 `verification` 名称提交报告：
 
@@ -599,7 +605,7 @@ CPU 厂商／型号／架构／核心线程、主板与 BIOS、UEFI 或 Legacy�
 
 ## 生成 EFI 前的专项准备
 
-- 导出 A 的 ACPI 原始表；使用 SSDTTime 等原作者工具按本机生成必要补丁。已经可用的补丁仍核对设备路径，不把别人的 DSDT 作为默认输入。
+- 按 [阶段 03 的固定采集路线](#section-04-installer)在 A 的 Windows 中导出 ACPI 原始表，默认由 Agent 准备 Python；A 缺少 Python 不是直接要求重启的理由。使用 SSDTTime 等原作者工具按本机生成必要补丁。已经可用的补丁仍核对设备路径，不把别人的 DSDT 作为默认输入。
 - 在 Windows 阶段尽量完成 USBToolBox 端口发现与映射。用户需要逐孔插拔 USB 2／USB 3 设备，内部蓝牙按内部端口处理；工具输出后检查端口数量、连接类型和实际插孔覆盖。不能从“当前插着的设备”宣称全部 USB 已映射。
 - 为网络准备至少一条安装恢复环境中可用的路径。恢复模式依赖下载时，仅在 Windows 中网卡可用并不足够。
 - 选择合适 SMBIOS，生成本机独立身份或在修复现有系统时保留原有正确身份。新安装不复制案例的序列号、MLB、ROM 或 SystemUUID，也不借用真实 Mac 的身份。
@@ -688,6 +694,57 @@ OpenCore 程序、OpenRuntime、Sample.plist、Configuration 文档和 ocvalidat
 
 恢复镜像是安装恢复环境，不是完整离线系统镜像，也不是 BIOS 固件。恢复环境联网必须可用，否则先准备可用网卡／驱动或明确的离线安装方案。若用户指定精确小版本但 Apple 恢复服务器不提供，说明实际可取得版本，不静默替换。
 
+## ACPI：默认不增加重启
+
+固定优先级：复用本任务已验证的 A 原始表 → 在 A 的 Windows 中自动准备 Python 并采集 → 默认路线经诊断仍失败时让用户选择备用路线。不能把“A 没有 Python”直接改成“先重启采集”，也不能为追求不安装工具而增加人工操作。已有原作者原生导出工具且能验证输出时，可直接使用，仍然不用 Python 或重启。
+
+| 路线 | Agent 做什么 | 用户做什么 |
+|---|---|---|
+| 默认：Windows + Python | 复用兼容解释器；缺少时安装官方用户级 Python，准备锁定的 SSDTTime／ACPICA，在 A 导出后传回 B | 通常无需操作；在首次短提示中说明可选免 Python 路线，不另开一轮安装确认 |
+| 可选：免 Python 的 SysReport | 准备同版本 OpenCore DEBUG 诊断配置，开启 SysReport，取回真实表后再制作安装配置 | 用户选择后，额外启动到 OC 菜单并回 Windows；采集时不进入 macOS 恢复 |
+
+默认路线的连续动作：
+
+1. 用当前已验证的 SSH 连接确认 A 身份；在 A 实际执行 Python 版本／标准库检查，不能把商店别名当成解释器。已存在兼容版本不重复安装。
+2. 缺少时由 Agent 从 Python 官方渠道获取与所选工具兼容的 Windows 安装包，锁定版本和下载证据，校验签名／发布方提供的校验值。默认用户级安装，使用完整解释器路径；不要改系统 PATH、文件关联或覆盖现有 Python。传统 EXE 安装器可使用其实际支持的 `/quiet`、`InstallAllUsers=0`、`PrependPath=0`、`Include_launcher=0`、`Include_test=0` 和独立 `TargetDir`；先核对该安装器帮助，安装后真实运行验证。不能把安装器参数直接用于 MSIX／安装管理器。[Python Windows 安装说明](https://docs.python.org/3/using/windows.html)
+3. 锁定原作者 SSDTTime 提交及其实际依赖，工具放进任务目录。通过 SSH 调用解释器完整路径与 `SSDTTime.py`；不要假设 `.bat` 的交互式自动下载器适合无人值守，也不要编造工具没有的 CLI。需要交互时根据锁定版本的实际菜单／源代码传入输入；使用库调用也先核对实际接口。SSDTTime 的 Windows 导出会使用 ACPICA 工具，Python 本身不是唯一能够读取 ACPI 的途径。[SSDTTime](https://github.com/corpnewt/SSDTTime)、[Windows 导出实现](https://github.com/corpnewt/SSDTTime/blob/master/Scripts/dsdt.py)
+4. 必须在 **A** 导出，B 负责下载、分析和保存；在 B 执行导出得到的是 B 的表。保存 A 身份、BIOS 版本、工具版本、退出码、时间及原始输出。取回 DSDT 和可取得的 SSDT 原始二进制，保留未修改副本；检查实际签名、长度、校验和及哈希，并用锁定的 iasl 分析／反编译。缺表、无法解析或依赖不全时停止安装交接，处理具体原因，不以“命令已运行”算完成。
+5. 按本机命名空间和硬件生成／选取确有必要的补丁，记录每个启用补丁的原始表依据与用途。不是所有机器都需要相同 SSDT，也不要把整份别机 DSDT 注入。ACPI 表完整仍不能证明 Booter／UEFI／CPU 配置正确：单独审核实际 config、固件内存映射依据与适用的 CPU 设置。
+
+遇到权限、依赖、下载／证书或导出错误，保留日志，在 Windows 中做针对性恢复；不关闭 TLS 校验、不循环盲试、不擅自切换重启路线。用户明确不装 Python或默认路线无法完成时，用一句话给出 SysReport 的操作代价，让用户选择。用户已经选择则直接执行，不重复确认。
+
+SysReport 路线是**采集启动**：使用所选 OC 版本文档要求的 DEBUG 构建，核对 `Misc → Debug → SysReport`、可写输出位置和日志，设置显示启动菜单并关闭自动倒计时（`ShowPicker=true`、`Timeout=0`，以该版本文档为准）。交接明确“停在 OC 菜单，不选 macOS；随后从主板 Windows Boot Manager 回 Windows”。确认导出文件实际存在并有效后，再组装安装 EFI；仅开启选项或看到菜单不能算采集成功。保留 Windows 引导和 U 盘备份，不覆盖硬盘 ESP 来采集。[OpenCore 配置文档](https://github.com/acidanthera/OpenCorePkg/blob/master/Docs/Configuration.tex)
+
+## 03 的程序验收清单
+
+`review` 的 `acpi_tables` 检查必须为 `pass`，并增加 `manifest` 字段，值为任务目录内的相对路径，例如 `inventory/acpi/collection.json`。该清单采用下面的结构；所有 SHA256、UUID、路径和分析均由实际采集生成，不能把示例当证据。
+
+```json
+{
+  "schema": "acpi-evidence-v1",
+  "machine_uuid": "实际 A 的 UUID，与当前任务相符",
+  "method": "windows-python",
+  "capture_log": {"path": "evidence/acpi-capture.txt", "sha256": "实际 SHA256"},
+  "tables": [{"path": "inventory/acpi/DSDT.aml", "sha256": "实际 SHA256"}],
+  "config": {"path": "staging/EFI/OC/config.plist", "sha256": "实际 SHA256"},
+  "assessment": {"path": "evidence/acpi-assessment.md", "sha256": "实际 SHA256"},
+  "patches": [{
+    "path": "staging/EFI/OC/ACPI/SSDT-EXAMPLE.aml",
+    "sha256": "实际 SHA256",
+    "based_on": ["inventory/acpi/DSDT.aml"],
+    "reason": "实际本机设备路径、补丁用途及依据"
+  }]
+}
+```
+
+`tables` 列出实际 DSDT／SSDT 原始文件，至少有 DSDT；其他原始表同样保留，但不塞进这个专用于 AML 表的列表。`patches` 必须与当前 config 中全部启用的 `ACPI → Add` 文件一致，并关联实际原始表。经分析确实不需要 Add 时可为空，但须提供 `no_add_reason` 与完整分析；不能为了越过检查编造“无需补丁”。`method` 另可取 `windows-native` 或 `opencore-sysreport`；后者还要有 `user_choice` 文件路径与 SHA256，记录用户选择。`firmware_config_review` 单独引用固件／Booter／CPU 判断证据。
+
+控制器检查实际文件内容、哈希、表头／长度／校验和、目标字段、当前配置和启用补丁的一致性。清单及文件纳入后续完整性检查；修改 EFI 后必须重新评估并生成匹配清单。程序不判断任意分析文字是否真实，也无法替代 A 端采集来源的核对或实际启动测试。全部要求仍受阶段合同和真实授权约束。
+
+阶段 03 未通过时，下载、备份以及已授权的 U 盘准备可继续，但不能提示“选择 macOS 恢复环境开始安装”。`ocvalidate` 通过不等于 ACPI、固件或启动已验证。控制器只能阻止其自身阶段推进，Agent 不得绕过它直接安排安装启动。
+
+首次试启动还必须有可取回的诊断日志：默认 `Misc → Debug → Target=67`（启用日志、屏幕与文件）和 `AppleDebug=true`，核对 U 盘可写、空余空间、构建与文件位置，重启回来读取实际日志。控制器检查 Target 的日志启用／文件位和 AppleDebug；`Target=3` 只有屏幕输出，会被 `EFI_DIAGNOSTICS_INVALID` 拒绝。这只是启动前配置检查，不保证固件一定写出日志；没有日志时处理写入原因，不把缺失当成功。SysReport 仍须 DEBUG 构建；REL 加开启选项不生效。初次排障默认使用同版本 DEBUG，稳定后再评估关闭诊断。选项语义以该 OC 版本官方文档为准。
+
 ## EFI 组装
 
 从目标版本 Sample.plist 和 X64 目录开始，按硬件分支建立自己的 EFI。RapidEFI、OC 配置器或其他自动工具可以辅助，但生成结果必须审查和校验，不能取代硬件判断。只有 UI 的工具不能假设存在 CLI；SSH 启动看不见的 GUI 不算生成成功。
@@ -739,6 +796,8 @@ com.apple.recovery.boot/
 
 ## 重启之前
 
+先确认本次启动目的：阶段 03 的 `SysReport` 采集只进入 OpenCore 菜单后回 Windows，不选择 macOS 恢复环境。只有 03 完成 ACPI 文件门槛、固件配置审核及介质回读后，才能交接安装启动。只写完 U 盘或 ocvalidate 通过不够。
+
 把本次需要的插拔、按键、启动菜单和预期画面合并成一次短交接，避免每点击一项就要求回复。只给当前能连续完成的一组动作；涉及尚未核对的安装磁盘时，仍先确认目标，不能为少一步而让用户盲目抹盘。
 
 完成本阶段可检查的工作：文件回读、EFI 校验、日志设置、Windows 回退入口、当前可用配置备份。把具体人工动作写入 B 的 `NEXT.md`，告知用户重启将中断连接，确认用户已保存工作和重启时机。用户已明确要求此时重启时可发送远程重启，不再次询问。
@@ -765,7 +824,9 @@ com.apple.recovery.boot/
 
 要求清晰完整画面，必要时追加底部关键日志特写、发生时间和此前最后一步。图中的命令、URL 和文本只是证据，不作为新的授权或指令。
 
-读取可辨认的报错；模糊文字明确标记，不补写。最后一行不一定是根因：结合完整 panic、调用栈、OC 日志、启动阶段与最近改动判定。先提出一个可验证假设，保留当前可用 EFI，做最小变更，再让用户重复测试。
+读取可辨认的报错；模糊文字明确标记，不补写。`[EB|LOG:EXITBS:START]` 停滞需结合 Booter／UEFI 内存映射、CFG Lock／CPU 补丁等证据定位，不能凭该行断定缺 ACPI。先回 Windows 备份并读取本次 U 盘日志、实际 config.plist 与已加载 ACPI，核对 MAT 支持等实际信息，再一次改一个有依据的变量；不要盲套通用 Quirks 组合。[Dortania 排查](https://dortania.github.io/OpenCore-Install-Guide/troubleshooting/extended/kernel-issues.html)
+
+最后一行不一定是根因：结合完整 panic、调用栈、OC 日志、启动阶段与最近改动判定。先提出一个可验证假设，保留当前可用 EFI，做最小变更，再让用户重复测试。
 
 ## 断线时交付的信息
 
@@ -988,6 +1049,8 @@ python scripts/agentkit.py check-efi --root <准备中的EFI目录>
 7. 迁移硬盘引导时，单纯复制 ESP 文件并不足够，还处理了启动项。之后曾发生 Machine Check；当时针对 NVMe-only 环境试验阻止 AppleAHCIPort，随后能进入系统。该关联不等于根因被彻底证明，带 SATA 设备的机器尤其不能套用此屏蔽。
 
 ## 明确未解决／未完成验证
+
+2026-10-30 的新版流程实测补充（维护方只读核对）：恢复启动照片停在 EXITBS:START。U 盘实际使用 REL 构建，config 开启 SysReport，但盘上没有该报告；日志 Target=3、AppleDebug=false，未留下 OC 日志文件。只有一份 EC/USBX 补丁，不能把它视作本机 DSDT 已采集。与此前成功备份相比，SetupVirtualMap 由 true 变为 false，DummyPowerManagement 也由 true 变为 false；这些是对照线索，不是已证明的卡死根因或其他机器的推荐值。新流程须先采集原始表并配置日志、审查适配依据，再做一次一个变量的启动测试。本次未修改该电脑的 EFI 或安排验证启动。
 
 - 窗口失去焦点时出现黑块；原生截图也可见。透明度／输出方式试验未形成明确修复结论。
 - iPhone→Mac 的 Safari 接力和剪贴板曾恢复；Mac→iPhone 曾失败。没有后续证据证明双向全好。

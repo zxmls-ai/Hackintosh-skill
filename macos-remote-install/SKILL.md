@@ -2,7 +2,7 @@
 name: macos-remote-install
 description: 从另一台 B 电脑远程协助 A 电脑安装或修复 OpenCore 与 macOS 双系统。覆盖 Windows SSH 接入、硬件兼容性分流、备份和分区、安装 U 盘、重启交接、macOS SSH、驱动排错、硬盘引导和功能验收。适合需要逐步进度反馈及回退记录的安装任务；不承诺所有硬件兼容，也不提供可直接套用的通用 EFI。
 metadata:
-  version: "0.2.2"
+  version: "0.2.3"
   language: zh-CN
   updated: "2026-10-30"
 ---
@@ -16,6 +16,8 @@ metadata:
 本 Skill 定位为固定流程、AI 处理异常的安装工具。B 能执行 Python 时，先读取 [标准流程控制器](references/00-controller.md)，运行 `python scripts/workflow.py --run "私有任务目录" --json init`；已有受控任务用 `status`。**正常流程根据 `next_action` 执行，向用户输出 `display`，不要重新编排步骤或手改任务状态。阶段 00 使用现成连接器，不另写一个替代验收；01～08 合同模式可用已核验身份的 SSH/SFTP 工具执行对应参考中的动作。** 文件路径与命令在 B 处理，不让用户逐条执行。
 
 阶段 00 已由程序实际验证 SSH、主机密钥、机器身份、管理员权限和文件传输，全部通过才推进。01～08 的统一合同在 [workflow.json](workflow.json)，当前仍由 Agent 按合同执行并提交有证据的审核结果，不能宣称全部阶段已自动验收。正常分支使用固定脚本，异常分支按错误码 `recover`；未覆盖问题使用 `diagnose → repair-result → 原步骤重验`。
+
+**阶段 03 的固定前置条件：** 默认复用有效本机 ACPI；缺少时由 Agent 在 A 准备 Python 与原作者工具，通过 SSH 在 Windows 中采集，不为了避免安装依赖而默认增加重启。只在用户选择“免 Python 方案”或默认路线经诊断仍不可用并得到用户选择时，用 OpenCore DEBUG 的 SysReport 采集。采集启动必须停在 OC 菜单后回 Windows，不交接“选择 macOS 恢复”。`review` 必须提交并通过实际 ACPI 表／配置／适配证据检查，详情见 [介质前置检查](references/04-installer.md)。阶段 03 未过不得安排安装启动；下载、已授权的介质准备和明确标注的诊断启动可在此前进行。
 
 用户只需一次 A 端配置与结果回传；已有完整可信结果直接导入，已有凭据直接使用。B 的 Python／工具不可用时明确标为“人工指导模式”，按下面参考执行，不伪造控制器输出。用户未要求切换模式时，不因为某个检查失败而绕过程序改用自由操作。
 

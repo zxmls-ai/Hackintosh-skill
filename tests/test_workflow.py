@@ -296,7 +296,7 @@ class WorkflowTests(unittest.TestCase):
         flow.upgrade(self.run,loaded)
         current=flow.load(self.run)
         self.assertEqual(current['run_id'],original_id)
-        self.assertEqual(current['version'],'0.2.2')
+        self.assertEqual(current['version'],'0.2.3')
         self.assertEqual(current['step'],'verify')
         flow.verify_evidence(self.run,current['upgrades'][0]['backup'])
 
@@ -317,7 +317,7 @@ class WorkflowTests(unittest.TestCase):
         flow.upgrade(self.run,loaded)
         current=flow.load(self.run)
         self.assertEqual(current['upgrades'][-1]['from'],'0.2.1')
-        self.assertEqual(current['upgrades'][-1]['to'],'0.2.2')
+        self.assertEqual(current['upgrades'][-1]['to'],'0.2.3')
         self.assertEqual(current['attempt_count'],1)
         self.assertEqual(current['packet'],self.state['packet'])
         self.assertEqual(current['step'],'verify')
