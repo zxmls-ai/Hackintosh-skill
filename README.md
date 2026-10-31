@@ -12,7 +12,7 @@
 
 让运行在 **B 电脑**上的 Agent，通过远程连接协助 **A 电脑**安装、调试与验收 macOS，保留 Windows。面向小白，把能够自动完成的工作交给 Agent，Windows SSH 用一次粘贴的管理员 PowerShell 配置，其余现场操作优先 GUI。
 
-**v0.2.5：根据实机排错补充固定的 EFI 来源选择、有效配置审计与对照试验流程；新增只读 EFI 比较工具，防止把文件存在、校验通过或批量试验误报为根因。** 00 程序验收，01～08 合同审核；异常处理后回到原步骤。实际执行主路线为 x86-64 UEFI PC；不支持的硬件应报告限制，不承诺通过修改参数解决。
+**v0.2.6：恢复界面改为给人类照做的 8 步 GUI 清单，明确分区识别、英文卷名 `macOS`、APFS 格式及每次重启的 OC 选项；正常点击之间无需反复回复。** 00 程序验收，01～08 合同审核；异常处理后回到原步骤。实际执行主路线为 x86-64 UEFI PC；不支持的硬件应报告限制，不承诺通过修改参数解决。
 
 ## 给 Agent 一个仓库链接
 
@@ -36,9 +36,10 @@
 | [macos-remote-install/SKILL.md](macos-remote-install/SKILL.md) | 跨 Agent 的精简技能入口，按阶段加载资料 |
 | [AI-GUIDE.md](AI-GUIDE.md) | 从相同内容合成的单文件指南，适合直接附给 Agent |
 | [START-HERE.md](START-HERE.md) | 本地文件夹／WorkBuddy 使用方式 |
-| [WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.5.zip) | 需要本地技能导入时下载；SSH 修复已有单机实测，跨 Agent 流程继续验证 |
+| [WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.6.zip) | 需要本地技能导入时下载；SSH 修复已有单机实测，跨 Agent 流程继续验证 |
 | [references](macos-remote-install/references/) | SSH、兼容性、备份分区、EFI、安装、驱动、排错、续接 |
 | [流程规范与调用方式](macos-remote-install/references/00-controller.md) | 固定输入输出、错误恢复、断点续接与合同审核 |
+| [恢复界面安装步骤](macos-remote-install/references/05-boot-handoff.md) | Agent 填好目标后交付：抹掉、安装、重启选择、初始化 |
 | [EFI 决策与排错](macos-remote-install/references/09-efi-diagnostics.md) | 起点选择、有效配置审计、基线比较与有限试验，避免无依据堆补丁 |
 | [阶段合同](macos-remote-install/workflow.json) | 00～08 的顺序、输入、动作、验收和恢复位置 |
 | [scripts](macos-remote-install/scripts/) | 流程控制器、固定 SSH 连接器、采集、磁盘身份与文件校验 |
@@ -50,7 +51,7 @@
 
 **开始前：** 默认使用 A 的 Windows 实际账户名与非空账户密码连接，Hello PIN 不能代替密码，不要求先配置公钥。Agent 先运行 [流程控制器](macos-remote-install/references/00-controller.md)，从返回文件读取完整管理员 PowerShell 代码交给用户，取消 GUI 安装路线。脚本按需安装服务器、设置开机自启、启动服务、核验 TCP 22 的监听进程，并创建或修复持久防火墙规则。规则覆盖所有网络类型，新增放行范围为本地子网；跨网段由 Agent 按实际来源调整。安装、校验、IP／用户名、主机指纹与网段比较合并输出一个连接结果。复制结果块到 B，将第一行占位替换为账户密码或 B 上的密码文件完整路径，与连接信息一起发送；已提供可填“已提供”。目标 macOS 版本尚未知时一并补充（未定也可以）；B 自动核验握手、SSH、SFTP 并采集硬件。网段相同不等于可达，详细见 [00 远程接入](macos-remote-install/references/01-remote-access.md)。
 
-**正在测试旧版的用户：** 保留现有任务记录、已安装服务和可用连接。让 Agent 获取 v0.2.5 对应的仓库提交或重新导入新版 WorkBuddy 包，重新读取 SKILL 与远程接入参考，v0.1 任务仍在 00 时用 init 接管；v0.2.0～v0.2.3 受控任务由新版的 upgrade 核对并迁移，再 status 续接。升级只接受登记过的源码字节／LF／CRLF 哈希、00～04 的任务，并保留备份、身份与证据；≤0.2.2 旧任务已进 04 时回到 03 补验 ACPI；0.2.3 已通过的阶段保持原位，旧完成记录留作历史，不重做分区或清空 U 盘。程序锁定源文件，后续升级须明确迁移，不能直接覆盖正在运行的快照；不要只刷新网页后假定本地旧 Skill 已更新，也不要为升级指南重装系统。固定并记录新提交号，其余阶段继续按该快照执行。
+**正在测试旧版的用户：** 保留现有任务记录、已安装服务和可用连接。让 Agent 获取 v0.2.6 对应的仓库提交或重新导入新版 WorkBuddy 包，重新读取 SKILL 与远程接入参考，v0.1 任务仍在 00 时用 init 接管；v0.2.0～v0.2.3 受控任务由新版的 upgrade 核对并迁移，再 status 续接。升级只接受登记过的源码字节／LF／CRLF 哈希、00～04 的任务，并保留备份、身份与证据；≤0.2.2 旧任务已进 04 时回到 03 补验 ACPI；0.2.3 已通过的阶段保持原位，旧完成记录留作历史，不重做分区或清空 U 盘。程序锁定源文件，后续升级须明确迁移，不能直接覆盖正在运行的快照；不要只刷新网页后假定本地旧 Skill 已更新，也不要为升级指南重装系统。固定并记录新提交号，其余阶段继续按该快照执行。
 
 ## 自动化的边界
 

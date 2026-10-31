@@ -1,6 +1,6 @@
 {
   "schema": "install-workflow-v1",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "phases": [
     {
       "id": "00-remote",
@@ -172,6 +172,7 @@
       "actions": [
         "交付必要 BIOS 设置与启动菜单步骤",
         "确认恢复界面与网络",
+        "按 05 填好实际分区识别信息，交付八步 GUI 清单与重启选项表；默认英文卷名 macOS",
         "重新核对安装目标",
         "安装并按现场选择下一启动项",
         "首次引导失败先执行 09 固定排错流程；两轮无新证据返回基线、部署与日志核对"
@@ -184,7 +185,22 @@
       ],
       "failure_route": "diagnose-current",
       "resume": "04-install.current-boot",
-      "next": "05-macos-remote"
+      "next": "05-macos-remote",
+      "human_handoff": {
+        "reference": "references/05-boot-handoff.md",
+        "default_volume_name": "macOS",
+        "name_policy": "unique-ascii-english",
+        "mode": "one-continuous-numbered-checklist-plus-boot-choice-table",
+        "fill_before_handoff": [
+          "approved-target-label",
+          "display-capacity",
+          "parent-disk",
+          "boot-menu-key",
+          "uefi-usb-entry"
+        ],
+        "stop_before_erase_if_uncertain": true,
+        "per_click_reply_required": false
+      }
     },
     {
       "id": "05-macos-remote",

@@ -13,7 +13,7 @@ SKILL = ROOT / "macos-remote-install"
 sys.path.insert(0, str(SKILL / "scripts"))
 from agentkit import no_link, sha
 
-VERSION = "0.2.5"
+VERSION = "0.2.6"
 if json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))["version"] != VERSION:
     raise ValueError("Workflow version must match the package version")
 REF_NAMES = ["00-controller", "01-remote-access", "02-hardware-routing", "03-storage", "04-installer",

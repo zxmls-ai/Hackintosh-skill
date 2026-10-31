@@ -237,6 +237,34 @@
       ],
       "rewind_phases": [],
       "source_variants": {}
+    },
+    "0.2.5": {
+      "sources": {
+        "workflow.py": "8731ff92bb8628acd1b30532924471703e7c15d7632b1842510f833386b53f13",
+        "ssh_transport.py": "71a441e14dc6a4e130322e764e4bf37f9c21b23f1d9b4f2126c3e4debe5a2433",
+        "probe-windows.ps1": "47a772c41058a91c3c412c8f1cab2bc335b5b14c0d2d909720a93a8b79cde360",
+        "enable-windows-ssh.ps1": "7fcc8ecc315ba03ab103788241c73417dfeaca6ceea1d1296ca3e1a5f9fd55e8",
+        "prepare_ssh_handoff.py": "c0501af412042320a883a22b45638221f3e7a527b351d93ef0e5369bc8d7071f",
+        "agentkit.py": "16186ae8ed3ed2efb0a967b850426588692dd28c218d4e2d28ed528812a02cdc",
+        "acpi_guard.py": "35b6c9522418260d3af4ff253e6a36882eb3b5c583f4469088e5988058de4ba5",
+        "efi_audit.py": "57466518f4083063bc303b176cb5db165d6d0f440af094aefc6318db7f72e96e",
+        "workflow.json": "bbf50ded5b343849aa0c3c97d196468fb0bad625a84858e85376cab210fbdd2a",
+        "upgrades.json": "5087f73e351f51fec611a36cb3cac08d1f3c5ea7fae4deabc4fc7621b92f1f04"
+      },
+      "allowed_phases": [
+        "00-remote",
+        "01-hardware",
+        "02-storage",
+        "03-media",
+        "04-install"
+      ],
+      "allowed_review_phases": [
+        "01-hardware",
+        "02-storage",
+        "03-media"
+      ],
+      "rewind_phases": [],
+      "source_variants": {}
     }
   }
 }
