@@ -71,7 +71,7 @@ class SourceIdentityTests(unittest.TestCase):
         self.assertEqual(flow.load(self.run)['phase'],'04-install')
 
     def test_recent_upgrade_retains_phase_and_registers_auditor(self):
-        for version,phase in (('0.2.4','04-install'),('0.2.5','04-install'),('0.2.6','06-devices')):
+        for version,phase in (('0.2.4','04-install'),('0.2.5','04-install'),('0.2.6','06-devices'),('0.2.7','06-devices')):
             with self.subTest(version=version,phase=phase):
                 profile=flow.read_json(flow.UPGRADE_PATH)['from'][version]
                 self.state.update(version=version,sources=copy.deepcopy(profile['sources']),phase=phase,step='guided-contract')
@@ -80,6 +80,17 @@ class SourceIdentityTests(unittest.TestCase):
                 self.assertEqual(current['phase'],phase)
                 self.assertEqual(current['version'],flow.VERSION)
                 self.assertIn('efi_audit.py',current['sources'])
+
+    def test_earlier_local_candidate_can_resume_the_same_step(self):
+        profile = flow.read_json(flow.UPGRADE_PATH)['from']['0.2.8']
+        old_sources = copy.deepcopy(profile['sources'])
+        self.state.update(version='0.2.8', sources=old_sources, phase='06-devices', step='guided-contract')
+        flow.upgrade(self.run, self.state)
+        current = flow.load(self.run)
+        backup = flow.read_json(self.run / current['upgrades'][-1]['backup']['path'])
+        self.assertEqual(backup['sources'], old_sources)
+        self.assertEqual((current['phase'], current['step']), ('06-devices', 'guided-contract'))
+        self.assertEqual(current['sources'], flow.source_lock())
 
 
 if __name__=='__main__':unittest.main()

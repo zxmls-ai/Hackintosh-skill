@@ -63,21 +63,80 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state['step'],'verify')
 
     def test_prepare_has_one_ip_change_and_is_not_execution(self):
+        # Agents commonly consume init/status internally before showing prepare.
+        initial = flow.render_result(self.state)
+        self.assertNotIn('presentation_id',initial)
+        self.assertEqual(initial['next_action'],'prepare-or-import')
         flow.prepare(self.run,self.state,['198.51.100.2'])
         output=flow.render_result(self.state)
         code=(self.run/output['script']['path']).read_text(encoding='utf-8-sig')
         self.assertEqual(code,flow.render(flow.SOURCE.read_text(encoding='utf-8-sig'),['198.51.100.2']))
         self.assertEqual(output['next_action'],'import')
-        self.assertEqual(output['display'].count('\n'),2)
+        first=output['display']
+        self.assertTrue(first.startswith('**00 · '+flow.PHASES['00-remote']['title']+'**\n\n'))
+        for phrase in ('**A 电脑**','**B 电脑**','远程登录（SSH）','**现在**','**稍后**',
+                       '备份','可以清空的 U 盘','启动菜单','**全程怎么走？**','PIN','以管理员身份运行',
+                       '末尾两行','B 上密码文件的完整路径','已提供','待推荐'):
+            self.assertIn(phrase,first)
+        self.assertLess(first.index('**全程怎么走？**'),first.index('以管理员身份运行'))
+        self.assertNotIn('198.51.100.2',first)
+        self.assertEqual(flow.render_result(flow.load(self.run)),output)  # inspecting status never acknowledges delivery
+        self.assertNotIn('**先认两台电脑**',output['display_compact'])
         self.assertIsNone(self.state['packet'])
+
+    def test_intro_delivery_ack_persists_without_changing_install_state(self):
+        flow.prepare(self.run,self.state,['198.51.100.2'])
+        before=flow.render_result(self.state)
+        flow.prepare(self.run,self.state,['198.51.100.2'])
+        self.assertEqual(flow.render_result(self.state)['presentation_id'],before['presentation_id'])
+        flow.intro_shown(self.run,self.state)
+        shown=flow.load(self.run)
+        self.assertEqual(flow.render_result(shown)['display'],before['display_compact'])
+        self.assertEqual((shown['step'],shown['status'],shown['verification_proofs']),('import','waiting_user',[]))
+        flow.intro_shown(self.run,shown)
+        self.assertEqual(flow.load(self.run)['revision'],self.state['revision'])
+        flow.resume(self.run,shown)
+        flow.prepare(self.run,shown,['198.51.100.2'])
+        self.assertNotIn('presentation_id',flow.render_result(shown))
+
+    def test_failed_user_handoff_then_reprepare_shows_only_the_requested_action(self):
+        path=self.write('incomplete.txt','not a handoff')
+        flow.prepare(self.run,self.state,['198.51.100.2'])
+        with self.assertRaises(ssh.Fault) as caught: flow.import_handoff(self.run,self.state,path)
+        flow.record_fault(self.run,self.state,caught.exception)
+        failure=flow.render_result(self.state)
+        self.assertEqual(failure['error'],'PACKET_INVALID')
+        self.assertIn('SSH_HANDOFF_V1',failure['display'])
+        self.assertNotIn('PACKET_INVALID',failure['display'])
+        flow.prepare(self.run,self.state,['198.51.100.2'])
+        self.assertNotIn('presentation_id',flow.render_result(self.state))
 
     def test_existing_packet_skips_setup_and_requires_actual_connection(self):
         self.import_good()
         self.assertNotIn('prepared',self.state)
+        self.assertNotIn('presentation_id',flow.render_result(self.state))
         self.assertEqual(self.state['phase'],'00-remote')
         flow.verify(self.run,self.state,verifier=good_result)
         self.assertEqual(self.state['phase'],'01-hardware')
         self.assertEqual(len(self.state['verification_proofs']),2)
+        self.assertNotIn('**先认两台电脑**',flow.render_result(self.state)['display'])
+
+    def test_every_phase_has_a_separate_human_summary_without_machine_commands(self):
+        for phase in list(flow.PHASES)[1:]:
+            with self.subTest(phase=phase):
+                output=flow.render_result(dict(self.state,phase=phase,step='guided-contract'))
+                display=output['display']
+                self.assertTrue(display.startswith(f'**{phase[:2]} · {flow.PHASES[phase]["title"]}**\n\n'))
+                for marker in ('\n\n**现在**','\n\n**接下来**','\n\n**请你**'):
+                    self.assertEqual(display.count(marker),1)
+                self.assertNotIn(output['next_action'],display)
+                self.assertNotIn('**先认两台电脑**',display)
+
+    def test_accepted_limitation_is_not_reported_as_verified_access(self):
+        result=flow.render_result(dict(self.state,phase='06-devices',step='guided-contract',
+                                      guided_reviews=[{'phase':'05-macos-remote','limited':True}]))
+        self.assertIn('限制',result['display'])
+        self.assertNotIn('已接入 A 的 macOS',result['display'])
 
     def test_boolean_claim_cannot_replace_missing_connection_checks(self):
         self.import_good()
@@ -231,7 +290,9 @@ class WorkflowTests(unittest.TestCase):
         output=flow.render_result(self.state)
         self.assertEqual(output['next_action'],'import')
         self.assertIn('重启 A',output['display'])
-        self.assertEqual(output['display'].count('\n'),2)
+        self.assertIn('**请你**',output['display'])
+        self.assertNotIn('**先认两台电脑**',output['display'])
+        self.assertNotIn('presentation_id',output)
 
     def test_repeated_fixed_recovery_is_bounded(self):
         for _ in range(2):

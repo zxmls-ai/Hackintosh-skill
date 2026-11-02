@@ -1,6 +1,6 @@
-# Hackintosh-skill
+# Hackintosh-skill · v0.2.8
 
-将这份指南交给 Codex、Claude Code、DeepSeek Harness、WorkBuddy 等 Agent，按统一流程协助安装和排错，尽量减少重复操作与无依据试错。
+你可以在一台电脑上和 AI 助手聊天，让它帮你在另一台 Windows 电脑上检查硬件、准备安装 U 盘，再安装 macOS。默认保留 Windows。
 
 > **测试阶段声明／免责声明**
 >
@@ -10,24 +10,44 @@
 >
 > 分区、格式化、修改引导及安装驱动可能导致数据丢失或系统无法启动。请先备份重要数据并确认可恢复；涉及写盘时核对目标，保留 Windows 与可用引导的回退方式。本项目按 MIT 许可证“按现状”提供，不作明示或默示担保；请勿将尚未验证的配置直接用于唯一的工作环境。
 
-让运行在 **B 电脑**上的 Agent，通过远程连接协助 **A 电脑**安装、调试与验收 macOS，保留 Windows。面向小白，把能够自动完成的工作交给 Agent，Windows SSH 用一次粘贴的管理员 PowerShell 配置，其余现场操作优先 GUI。
+## 开始前，先分清两台电脑
 
-**v0.2.7 加入安装后的显卡加速验收、逐网卡检查和 GitHub 下载中转。** 00 程序验收，01～08 合同审核；异常处理后回到原步骤。实际执行主路线为 x86-64 UEFI PC；不支持的硬件应报告限制，不承诺通过修改参数解决。
+- **A 电脑是安装机。** 现在运行 Windows，以后要从 U 盘启动，在它的屏幕上安装 macOS。
+- **B 电脑是助手机。** 你在这里打开 WorkBuddy 等 AI 工具、看提示、发回复。安装时，B 也会帮你保存进度，方便 A 重启后接着做。
 
-## 给 Agent 一个仓库链接
+**为什么先连两台电脑？** 聊天里的助手只能操作自己所在的 B。开启远程连接（SSH）后，它才能通过家里的网络读取 A 的硬件、传送安装文件。等 A 重启进入安装画面，你再按它给的清单操作。
 
-在 WorkBuddy＋DeepSeek 或具备文件、终端与联网能力的其他 Agent 中，直接发送下面这段话：
+**现在准备**　A 可以是 Intel 或 AMD 的 64 位 PC。让 A 进入 Windows，确认账户有管理员权限和非空登录密码。平常用 PIN 解锁的话，也需要知道这个账户的密码。让两台电脑接入同一个路由器下可互访的网络，在 B 打开能读文件、运行命令和联网的 AI 助手。具体硬件由助手检查，你无需自己认型号。
+
+**稍后准备**　一只可以清空的 U 盘、一处能存重要文件备份的位置，以及在 A 前看屏幕、用键鼠、重启选启动项的条件。U 盘和安装空间要多大，助手会根据检查结果告诉你。现在可以先把 U 盘放在手边。
+
+**安装大致分四段**
+
+| 到了哪一步 | 你会看到什么 |
+|---|---|
+| 00～01　连接和检查 | 助手连上 A 的 Windows，检查能装哪个 macOS、哪些硬件可能需要额外处理。 |
+| 02～03　准备安装 | 你确认备份和目标分区，再插入指定 U 盘。助手核对目标、制作启动盘。 |
+| 04　现场安装 | 你在 A 从 U 盘启动，按一份清单选择预留分区、安装并完成桌面初始化。 |
+| 05～08　装好之后 | 助手重新连接 A，逐项测试硬件，验证拔掉 U 盘后的启动，再交付备份和恢复方法。 |
+
+## 在 B 上开始
+
+在 B 打开 WorkBuddy 或其他能读文件、运行命令的 AI 助手，复制下面两行到对话框即可。
 
 ```text
-仓库：https://github.com/zxmls-ai/Hackintosh-skill
-
-请先读取仓库 README.md，再读取 macos-remote-install/SKILL.md，按它协助我在另一台 A 电脑安装 OpenCore 与 macOS。你运行在 B 电脑。先读取 references/00-controller.md，在 B 调用 workflow.py 初始化或续接任务，按 next_action 执行并原样展示 display；00 不另写连接器或手改状态，之后按阶段合同采集硬件并判断可行性。保留 Windows，实际版本与安装空间根据现场决定。
-能自动完成且已授权的操作请自动完成；清空 U 盘或分区前展示具体目标与备份验证结果。阶段 00 用完整 PowerShell 代码配置 SSH，其他人工步骤优先 GUI，每阶段只简短说明“进度／下一步／需要你”；合并能一次完成的操作，详细日志自行保存；重启前保存续接记录，遇到问题引导我拍照反馈。进入 macOS 后继续远程检查驱动、双系统启动与功能，不把未实测的项目报告为成功。
+请读取 https://github.com/zxmls-ai/Hackintosh-skill 的 README 和 macos-remote-install/SKILL.md，带我在另一台电脑安装 macOS，并保留 Windows。
+我第一次操作。先告诉我两台电脑各做什么、现在要准备什么，再告诉我到哪台电脑做哪一步。清空任何设备前请先和我核对。
 ```
 
-只发一个链接时，一些 Agent 可能只做网页摘要，因此建议同时附上这段安装请求。普通聊天模型没有终端、SSH 或设备访问能力，读取 Skill 不能凭空获得这些能力。
+第一轮会先介绍两台电脑的分工，再给一段完整命令。你在 A 粘贴运行一次，把结果发回 B。助手核对连接后，就可以自动检查硬件。已有受控任务会按保存的进度继续。
 
-**给 Agent 的仓库获取规则：** 首先读取入口并理解边界。具备 git 时把用户提供的准确仓库克隆到 B 的新目录，记录来源、分支与完整提交号；已有目录先检查来源与本地变更，不强制覆盖。没有 git 时下载对应提交的源码归档并记录来源。安装过程中固定该快照，不自动切换 main 的新内容。只有网页读取能力时可引导用户操作，但不能声称已自动执行或省略检查。目录中的脚本运行前仍需审阅。
+想先看看助手会怎么说，可以打开[新手对话预览](新手对话预览.md)。习惯用 WorkBuddy 技能导入的用户，可以直接[下载 v0.2.8 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.8.zip)。遇到仓库访问问题时，见[新手起步](START-HERE.md)。
+
+## 给 Agent 的入口说明
+
+在 B 取得仓库快照并记录分支和完整提交号。已有目录先检查来源与本地变更。没有 git 就取得对应提交的源码归档。用户提供完整离线包时，记录包版本和 SHA256。安装期间固定同一份源码。运行前审阅脚本。只有网页读取权限时进入人工指导模式并说明当前能力。
+
+执行路线面向支持 UEFI 启动的 x86-64 PC。组装 EFI 和修复设备前先查询现成方案，登记选择并限制重复试验。阶段 00 由控制器在 B 验证连接，01～08 按阶段要求和现场证据审核。[流程控制器](macos-remote-install/references/00-controller.md)
 
 ## 包含什么
 
@@ -35,12 +55,13 @@
 |---|---|
 | [macos-remote-install/SKILL.md](macos-remote-install/SKILL.md) | 跨 Agent 的精简技能入口，按阶段加载资料 |
 | [AI-GUIDE.md](AI-GUIDE.md) | 从相同内容合成的单文件指南，适合直接附给 Agent |
-| [START-HERE.md](START-HERE.md) | 本地文件夹／WorkBuddy 使用方式 |
-| [WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.7.zip) | 需要本地技能导入时下载；SSH 修复已有单机实测，跨 Agent 流程继续验证 |
+| [START-HERE.md](START-HERE.md) | 第一次启动、离线读取及 WorkBuddy 使用方式 |
+| [WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.8.zip) | 下载 ZIP，供支持本地技能导入的 WorkBuddy 客户端使用 |
 | [references](macos-remote-install/references/) | SSH、兼容性、备份分区、EFI、安装、驱动、排错、续接 |
 | [流程规范与调用方式](macos-remote-install/references/00-controller.md) | 固定输入输出、错误恢复、断点续接与合同审核 |
 | [恢复界面安装步骤](macos-remote-install/references/05-boot-handoff.md) | Agent 填好目标后交付：抹掉、安装、重启选择、初始化 |
 | [安装后设备验收](macos-remote-install/references/06-postinstall.md) | Metal 计算回读、双网卡、Wi-Fi／蓝牙和下一项操作 |
+| [现成方案优先手册](macos-remote-install/references/10-existing-solutions.md) | 给 Agent 的查找、选用、审计与交接步骤 |
 | [EFI 决策与排错](macos-remote-install/references/09-efi-diagnostics.md) | 起点选择、有效配置审计、基线比较与有限试验，避免无依据堆补丁 |
 | [阶段合同](macos-remote-install/workflow.json) | 00～08 的顺序、输入、动作、验收和恢复位置 |
 | [scripts](macos-remote-install/scripts/) | 流程控制器、固定 SSH 连接器、采集、磁盘身份与文件校验 |
@@ -48,11 +69,9 @@
 | [VALIDATION.md](VALIDATION.md) | 本版实际测试范围和未测试部分 |
 | [TEST-FEEDBACK.md](TEST-FEEDBACK.md) | 实机测试反馈表 |
 
-阶段：接通 Windows SSH → 采集和兼容性判断 → 备份与空间规划 → EFI 与恢复 U 盘 → 用户协助启动安装 → 接通 macOS SSH → 驱动和功能检查 → 硬盘独立引导与交付。
+**第一次连接。** 在 A 用 Windows 管理员账户登录，在 B 携带 A 输出的两行结果一次回复。第一行按提示填密码或 B 上的密码文件完整路径，第二行保留原样。已有凭据可填“已提供”。想装的 macOS 版本可以顺带写，也可以留待助手检查。详细操作见 [准备工作和远程接入](macos-remote-install/references/01-remote-access.md)。
 
-**开始前：** 默认使用 A 的 Windows 实际账户名与非空账户密码连接，Hello PIN 不能代替密码，不要求先配置公钥。Agent 先运行 [流程控制器](macos-remote-install/references/00-controller.md)，从返回文件读取完整管理员 PowerShell 代码交给用户，取消 GUI 安装路线。脚本按需安装服务器、设置开机自启、启动服务、核验 TCP 22 的监听进程，并创建或修复持久防火墙规则。规则覆盖所有网络类型，新增放行范围为本地子网；跨网段由 Agent 按实际来源调整。安装、校验、IP／用户名、主机指纹与网段比较合并输出一个连接结果。复制结果块到 B，将第一行占位替换为账户密码或 B 上的密码文件完整路径，与连接信息一起发送；已提供可填“已提供”。目标 macOS 版本尚未知时一并补充（未定也可以）；B 自动核验握手、SSH、SFTP 并采集硬件。网段相同不等于可达，详细见 [00 远程接入](macos-remote-install/references/01-remote-access.md)。
-
-**已有安装任务可按记录续接。** 保存旧快照和任务记录，在独立目录取得新版并固定提交。v0.2.0～v0.2.5 的受控任务可在已登记的 00～04 阶段使用 `upgrade` 后运行 `status`；v0.2.6 可在 00～06 迁移。控制器会核对源文件、状态和历史证据。≤0.2.2 已进入 04 的任务需回 03 补验 ACPI。若历史证据已变化，按控制器的恢复说明处理，并在现场记录中单列实际硬件进度。早期 v0.1 任务仍在 00 时可按入口说明初始化。
+**已有安装任务可按记录续接。** 保存旧快照和任务记录，在独立目录固定新版本。v0.2.0～v0.2.5 的受控任务可在已登记的 00～04 阶段使用 `upgrade` 后运行 `status`。v0.2.6、v0.2.7 可在 00～06 迁移，正在执行的旧版硬件修复先在旧流程收尾。控制器会核对源文件、状态和历史证据。≤0.2.2 已进入 04 的任务需回 03 补验 ACPI。若历史证据已变化，按控制器的恢复说明处理，并在现场记录中单列实际硬件进度。早期 v0.1 任务仍在 00 时可按入口说明初始化。
 
 ## 自动化的边界
 
@@ -82,6 +101,6 @@ python -m unittest discover -s tests -v
 
 Windows SSH 代码以 [enable-windows-ssh.ps1](macos-remote-install/scripts/enable-windows-ssh.ps1) 为源，构建时同步进主入口；工作流正文维护在 [SKILL.md](macos-remote-install/SKILL.md) 和 references。AI-GUIDE 与 WorkBuddy 入口由 [tools/build_release.py](tools/build_release.py) 同步生成。使用反馈和改进方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-下载包的 SHA256 见 [downloads/SHA256SUMS.txt](https://github.com/zxmls-ai/Hackintosh-skill/blob/main/downloads/SHA256SUMS.txt)。需要完整源码，可用本页 Code → Download ZIP，或让 Agent 克隆仓库并固定提交号。
+需要完整源码，可用仓库首页 **Code → Download ZIP**，或让 Agent 克隆仓库并固定提交号。WorkBuddy 包可用[下载校验值](https://github.com/zxmls-ai/Hackintosh-skill/blob/main/downloads/SHA256SUMS.txt)核对。
 
 [MIT 许可证](LICENSE) 仅覆盖本仓库原创内容；链接到的操作系统、工具与驱动保留各自许可。

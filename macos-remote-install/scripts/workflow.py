@@ -16,51 +16,54 @@ from agentkit import confined, init_run, no_link, read_json, sha, utc
 from prepare_ssh_handoff import render, SOURCE
 from ssh_transport import Fault, parse_packet, verify_connection, credential_from_bundle
 from acpi_guard import check_acpi_evidence
+from solutions import assess as assess_solution
 
-VERSION = '0.2.7'
+VERSION = '0.2.8'
 ROOT = Path(__file__).resolve().parent
 CONTRACT_PATH = ROOT.parent / 'workflow.json'
 UPGRADE_PATH = ROOT.parent / 'upgrades.json'
 CONTRACT = read_json(CONTRACT_PATH)
 PHASES = {p['id']:p for p in CONTRACT['phases']}
-TRACKED = ['workflow.py','ssh_transport.py','probe-windows.ps1','enable-windows-ssh.ps1','prepare_ssh_handoff.py','agentkit.py','acpi_guard.py','efi_audit.py','metal_smoke_test.js']
+TRACKED = ['workflow.py','ssh_transport.py','probe-windows.ps1','enable-windows-ssh.ps1','prepare_ssh_handoff.py','agentkit.py','acpi_guard.py','efi_audit.py','metal_smoke_test.js','solutions.py']
 
 # code -> summary, diagnostic action, human input, fixed resume action
 ERRORS = {
-    'PACKET_INVALID': ('连接结果格式不完整','重新读取原始回传；不要补写缺失字段','重新粘贴完整 SSH_HANDOFF_V1 结果','import'),
-    'SETUP_FAILED': ('A 端配置未完成','检查失败步骤与原始错误，按已知规则处理','按当前错误提示提供一次检查结果','prepare'),
-    'FINGERPRINT_READ_FAILED': ('公钥指纹采集失败','对比实际收到的脚本与模板，检查公钥读取；不重装 SSH','运行修正后的整块代码并回传结果','prepare'),
-    'RESTART_REQUIRED': ('A 端组件安装需要重启','保存现场；重启后重新运行配置脚本','保存工作后重启 A，回传新的连接结果','prepare'),
-    'DEPENDENCY_MISSING': ('B 缺少 SSH 库','Agent 在任务目录安装 Paramiko 后重试，不改 A','无需操作','verify'),
-    'DEPENDENCY_INSTALL_FAILED': ('B 的 SSH 库安装未完成','核对 B 的 Python、网络与包源，保持原任务','暂时无需操作','diagnose'),
-    'CREDENTIAL_REQUIRED': ('尚未取得登录凭据','使用已提供的凭据；未提供才询问一次','提供账户密码的取得方式；已有密钥可沿用','verify'),
-    'CREDENTIAL_INVALID': ('凭据文件不可用','检查读取方式，不把 PIN 当作账户密码','仅在确实缺少时补充账户凭据','verify'),
-    'SSH_TIMEOUT': ('SSH 连接超时','核对地址、链路、监听及防火墙；检查第三方安全软件是否拦截','如被拦截，放行 OpenSSH/TCP 22；无法放行时可临时关闭网络防护重试，验证后恢复','verify'),
-    'SSH_REFUSED': ('A 拒绝 SSH 连接','核对实际监听与服务状态；已装服务不叠装','在 A 运行整块检查并回传一次','verify'),
-    'SSH_UNREACHABLE': ('无法访问回传的 A 地址','核对地址与路由；只尝试回传候选，不扫描全网','必要时回传 A 的最新检查结果','verify'),
-    'AUTH_FAILED': ('SSH 身份认证失败','核对真实用户名、密码类型与认证策略；停止重复密码尝试','核对一次账户凭据，不必改成公钥','verify'),
-    'HOST_KEY_MISMATCH': ('主机指纹与回传不符','停止发送凭据，核对 IP、系统重装和新的 A 端公钥','从 A 回传最新连接结果','import'),
-    'IDENTITY_MISMATCH': ('连接后的机器或账户身份不符','停止后续操作，重新确认目标电脑','确认目标 A，提供其连接结果','import'),
-    'IDENTITY_INCOMPLETE': ('无法取得可靠机器标识','进入专项核对，保留主机密钥和硬件证据','按诊断结果补充身份资料','verify'),
-    'ADMIN_REQUIRED': ('远程会话没有管理员权限','检查实际账户与远程令牌，不通过关闭账户保护绕过','按诊断结果使用获授权的管理员账户','verify'),
-    'SSH_PROTOCOL_FAILED': ('SSH 协议协商未通过','检查服务类型、版本和日志，不关闭指纹验证','必要时提供 A 的检查结果','verify'),
-    'REMOTE_COMMAND_TIMEOUT': ('远程只读检查超时','核对服务会话与 PowerShell 响应','暂时无需操作','verify'),
-    'REMOTE_PROBE_FAILED': ('远程只读检查失败','检查 PowerShell、CIM 与执行环境','必要时回传 A 的指定只读检查结果','verify'),
-    'REMOTE_OUTPUT_INVALID': ('远程检查结果不能验证','检查输出编码与固定探针，不补写成功结果','暂时无需操作','verify'),
-    'SFTP_FAILED': ('文件传输验证失败','检查 SFTP 子系统和账户临时目录权限','暂时无需操作','verify'),
-    'SFTP_CLEANUP_FAILED': ('测试文件清理未完成','核对并仅清理本次记录的临时测试文件','暂时无需操作','verify'),
-    'RETRY_LIMIT': ('相同条件下验证已连续失败','收集新证据并形成诊断方案，禁止无限重试','仅补充当前诊断所需的一项反馈','diagnose'),
-    'SOURCE_CHANGED': ('执行程序或流程规则已改变','保留任务记录，核对版本变更；不要静默换脚本','暂时无需操作','status'),
-    'UPGRADE_UNSUPPORTED': ('当前任务不满足已登记的升级条件','保留旧快照和记录；核对版本、阶段与是否仍在运行','暂时无需操作','status'),
-    'RESUME_REQUIRED': ('有中断的操作需要恢复','核对现场后重跑当前步骤，不跳到下一阶段','无需操作','resume'),
-    'STATE_INVALID': ('任务状态不完整','保留原文件，检查最后一条记录，不重新建同名任务','暂时无需操作','status'),
-    'ACTION_NOT_ALLOWED': ('当前步骤不接受此操作','读取 status 的 next_action 并按顺序执行','无需操作','status'),
-    'CONTRACT_REPORT_INVALID': ('阶段报告不符合当前合同','按返回的检查项补全真实证据后重交 review；不要伪造通过','无需操作','review'),
-    'ACPI_EVIDENCE_INVALID': ('本机 ACPI 文件或适配证据未通过','留在 03，补齐原始表、来源、配置及补丁校验；不要安排安装启动','默认由 Agent 在 Windows 中准备 Python 并采集；免 Python 重启采集为可选路线','review'),
-    'EFI_DIAGNOSTICS_INVALID': ('首次启动的文件日志未配置','留在 03，备份后启用 OC 文件日志与 AppleDebug，更新配置证据再 review','无需操作','review'),
-    'GUIDED_FAILURE': ('当前阶段遇到需要诊断的问题','按当前阶段收集证据，提交诊断方案','仅在确需现场信息时反馈','diagnose'),
-    'EVIDENCE_CHANGED': ('验收证据已变化或缺失','重新核对当前步骤；原完成状态不可沿用','暂时无需操作','status'),
-    'INTERNAL_ERROR': ('遇到未覆盖的执行错误','记录错误类别与复现条件，进入标准诊断流程','暂时无需操作','diagnose')
+    'SOLUTION_REQUIRED': ('还需确认现有方案适合这台电脑。','我会先核对同机成功记录，再比较工具作者提供的方案。','暂时无需操作。','select-source'),
+    'SOLUTION_RETRY_LIMIT': ('同一方案在相同条件下已试过两轮。','我会保留可退回的配置，核对新的线索或整理交接，再继续可做的检查。','暂时无需操作。','select-source'),
+    'PACKET_INVALID': ('收到的连接结果不完整。','我会用原始结果核对 A。','从 A 的 PowerShell 重新复制完整的 SSH_HANDOFF_V1 那一行到这里。','import'),
+    'SETUP_FAILED': ('A 上的远程登录还没配置好。','我会根据出错的位置检查原因。','如果还没发过，请把 A 窗口末尾的结果发来。','prepare'),
+    'FINGERPRINT_READ_FAILED': ('还没读到用来辨认 A 的连接指纹。','我会检查读取方式，再给你重试代码。','等代码准备好，再到 A 运行一次。','prepare'),
+    'RESTART_REQUIRED': ('Windows 提示安装远程登录功能后需要重启。','我会准备重启后的检查代码。','先保存 A 上打开的文件。','prepare'),
+    'DEPENDENCY_MISSING': ('B 上缺一个远程连接工具。','我会在 B 上补齐并重新连接。','暂时无需操作。','verify'),
+    'DEPENDENCY_INSTALL_FAILED': ('B 上的远程连接工具没有装好。','我会检查 B 的下载和安装记录。','暂时无需操作。','diagnose'),
+    'CREDENTIAL_REQUIRED': ('还缺少 A 的登录方式。','我会用你提供的 Windows 账户登录 A。','提供该账户的登录密码、B 上密码文件的路径，或已有的登录密钥。','verify'),
+    'CREDENTIAL_INVALID': ('无法读取给定的登录信息。','我会重新检查文件和内容。','请核对 B 上密码文件的完整路径，或直接提供 A 的账户密码。','verify'),
+    'SSH_TIMEOUT': ('B 尝试连接 A，一直没有收到回应。','我会核对地址，并检查远程登录是否被防火墙拦住。','暂时无需操作。如果 A 的安全软件提示拦截 OpenSSH，请允许它在局域网接收连接（TCP 22）。','verify'),
+    'SSH_REFUSED': ('A 有回应，但远程登录没有接通。','我会核对 A 的远程登录服务，再准备检查代码。','等代码准备好，再到 A 运行一次。','verify'),
+    'SSH_UNREACHABLE': ('B 无法访问 A 提供的网络地址。','我会核对地址，再准备连接检查。','确认两台电脑仍连在同一台路由器上。','verify'),
+    'AUTH_FAILED': ('A 没有接受这次账户登录。','我会核对用户名和登录设置，暂停尝试密码。','请核对一次 A 的 Windows 账户密码，PIN 不能代替它。','verify'),
+    'HOST_KEY_MISMATCH': ('响应连接的电脑与 A 提供的指纹不一致。','我会先核对电脑身份，再使用登录密码。','等重新检查的代码准备好，在 A 上运行并发回新结果。','import'),
+    'IDENTITY_MISMATCH': ('连上的电脑或账户与之前的信息不符。','我会先核对目标，再继续检查。','确认哪台是要装 macOS 的 A，再发来它的连接结果。','import'),
+    'IDENTITY_INCOMPLETE': ('尚不能可靠地辨认这台电脑。','我会核对连接记录和硬件标识。','暂时无需操作。','verify'),
+    'ADMIN_REQUIRED': ('当前账户远程登录后，缺少管理员权限。','我会核对登录账户和它实际具有的权限。','准备 A 上有管理员权限的 Windows 账户。','verify'),
+    'SSH_PROTOCOL_FAILED': ('B 与 A 没能建立远程登录。','我会检查两端的连接工具及服务记录。','暂时无需操作。','verify'),
+    'REMOTE_COMMAND_TIMEOUT': ('A 没有及时返回检查结果。','我会检查连接和 A 上的 PowerShell 是否仍有回应。','暂时无需操作。','verify'),
+    'REMOTE_PROBE_FAILED': ('已连上 A，但读取系统信息失败。','我会检查 A 的 PowerShell 和系统信息服务。','暂时无需操作。','verify'),
+    'REMOTE_OUTPUT_INVALID': ('A 返回的系统信息无法核实。','我会检查读取方式后重试。','暂时无需操作。','verify'),
+    'SFTP_FAILED': ('两台电脑之间的文件试传没有通过。','我会检查 A 是否允许传文件和写入临时文件夹。','暂时无需操作。','verify'),
+    'SFTP_CLEANUP_FAILED': ('试传文件还没清理完。','我会核对并移除这次检查留下的临时文件。','暂时无需操作。','verify'),
+    'RETRY_LIMIT': ('相同条件下的检查已连续失败。','我会根据现有记录查原因，找到新线索再试。','暂时无需操作。','diagnose'),
+    'SOURCE_CHANGED': ('当前工具与这次安装开始时使用的版本有差异。','我会核对版本，并保留之前的安装记录。','暂时无需操作。','status'),
+    'UPGRADE_UNSUPPORTED': ('这份安装记录暂时无法切换到新版工具。','我会保留旧版本，核对从哪一步可以继续。','暂时无需操作。','status'),
+    'RESUME_REQUIRED': ('上一次操作中断了。','我会核对进度，从中断处重新检查。','暂时无需操作。','resume'),
+    'STATE_INVALID': ('上一次的进度记录不完整。','我会保留原文件，核对最后完成的步骤。','暂时无需操作。','status'),
+    'ACTION_NOT_ALLOWED': ('还没到执行这个动作的步骤。','我会回到当前进度，按顺序继续。','暂时无需操作。','status'),
+    'CONTRACT_REPORT_INVALID': ('这一阶段还有检查结果需要补齐。','我会补查并记录实际结果后再继续。','暂时无需操作。','review'),
+    'ACPI_EVIDENCE_INVALID': ('还没核实启动文件与 A 的主板是否匹配。','我会在 Windows 中补查 A 的主板资料，再核对启动文件。','暂时无需操作。若希望 A 免装 Python，可改用多一次重启的方案。','review'),
+    'EFI_DIAGNOSTICS_INVALID': ('启动 U 盘还不能保存排错记录。','我会先备份配置，开启启动日志并检查，再安排试启动。','暂时无需操作。','review'),
+    'GUIDED_FAILURE': ('这一步遇到了需要排查的问题。','我会核对刚才的结果，找出下一项有用的检查。','暂时无需操作。需要现场画面时，我会说明拍哪里。','diagnose'),
+    'EVIDENCE_CHANGED': ('之前保存的检查结果有缺失或变化。','我会重新核对这一步的实际结果。','暂时无需操作。','status'),
+    'INTERNAL_ERROR': ('安装助手执行当前步骤时遇到了意外。','我会保留现场记录，查清原因再继续。','暂时无需操作。','diagnose')
 }
 
 
@@ -207,6 +210,8 @@ def upgrade(run,state):
     reviews=state.get('guided_reviews',[])
     if not profile or not registered_sources_match(state['sources'],profile) or state['phase'] not in profile['allowed_phases'] or state['status']=='running':
         raise Fault('UPGRADE_UNSUPPORTED')
+    if state['phase'] in SOURCE_PHASES and state['step']=='repair' and not (state.get('repair') or {}).get('trial_key'):
+        raise Fault('UPGRADE_UNSUPPORTED')
     allowed=set(profile.get('allowed_review_phases',[]))
     if any(r['phase'] not in allowed for r in reviews):
         raise Fault('UPGRADE_UNSUPPORTED')
@@ -272,6 +277,7 @@ def import_handoff(run, state, packet_path):
     if state['phase'] != '00-remote' or state['status'] == 'running':
         raise Fault('ACTION_NOT_ALLOWED')
     text = Path(packet_path).read_text(encoding='utf-8-sig')
+    state['handoff_attempted'] = True
     packet = parse_packet(text)
     if packet['status'] != 'local-ready':
         code = 'RESTART_REQUIRED' if packet['status'] == 'restart-required' else (
@@ -385,6 +391,52 @@ def recover(run, state):
         save(run,state,'diagnosis-required')
 
 
+SOURCE_PHASES = ('03-media', '04-install', '06-devices')
+
+
+def check_trial_budget(state, choice):
+    key = choice['trial_key']
+    if state.get('source_trials', {}).get(key, 0) < 2:
+        return
+    history = state.get('solution_history', {}).get(key, [])
+    raise Fault('SOLUTION_RETRY_LIMIT', {'handoff': {
+        'phase': state['phase'], 'topic': choice['topic'], 'target': choice['target'],
+        'source': choice['source'], 'revision': choice['revision'],
+        'source_evidence': choice['proofs'], 'recent_attempts': history[-2:],
+        'next': '取回上述计划与结果，先核对部署回读、实际启动来源及与原始产物的差异。'
+                '有新增事实时建新记录，仍无依据则交接本项并继续其他硬件。'}})
+
+
+def select_source(run, state, plan_path):
+    if state['phase'] not in SOURCE_PHASES or state['step'] == 'complete':
+        raise Fault('ACTION_NOT_ALLOWED')
+    try:
+        relative = Path(plan_path).absolute().relative_to(run.absolute()).as_posix()
+    except ValueError:
+        raise Fault('SOLUTION_REQUIRED') from None
+    choice = assess_solution(run, relative)
+    check_trial_budget(state, choice)
+    saved = state.get('source_decisions', {}).get(state['phase'], {}).get(relative)
+    if saved:
+        for item in saved['proofs']:
+            verify_evidence(run, item)
+        return saved
+    state.setdefault('source_decisions', {}).setdefault(state['phase'], {})[relative] = choice
+    save(run, state, 'selected-existing-source')
+    return choice
+
+
+def selected_solution(run, state, relative, **options):
+    if not isinstance(relative, str):
+        raise Fault('SOLUTION_REQUIRED')
+    stored = state.get('source_decisions', {}).get(state['phase'], {}).get(relative)
+    if not stored:
+        raise Fault('SOLUTION_REQUIRED')
+    for item in stored['proofs']:
+        verify_evidence(run, item)
+    return assess_solution(run, relative, **options)
+
+
 def diagnosis(run, state, plan_path):
     if not state.get('failure') or state['step']=='complete':
         raise Fault('ACTION_NOT_ALLOWED')
@@ -398,8 +450,17 @@ def diagnosis(run, state, plan_path):
     if not proofs:
         raise Fault('ACTION_NOT_ALLOWED')
     # A proposal is data. It is never passed to shell/eval or auto-approved.
+    choice = None
+    if state['phase'] in SOURCE_PHASES:
+        choice = selected_solution(run, state, plan.get('source_plan'))
+        if ' '.join(str(plan['target']).casefold().split()) != ' '.join(choice['target'].casefold().split()):
+            raise Fault('SOLUTION_REQUIRED', {'reason':'repair target differs from source plan'})
+        check_trial_budget(state, choice)
+        proofs.extend(choice['proofs'])
     state['repair'] = {'plan':evidence(run, 'repair-plan', plan),'proofs':proofs,
                        'failure_code':state['failure']['code'],'status':'proposed','phase':state['phase']}
+    if choice:
+        state['repair'].update(source_plan=plan['source_plan'], trial_key=choice['trial_key'])
     state.update(step='repair',status='waiting_agent')
     save(run, state, 'repair-proposed')
 
@@ -408,6 +469,8 @@ def repair_result(run, state, result_path):
     if state['step'] != 'repair' or not state.get('repair'):
         raise Fault('ACTION_NOT_ALLOWED')
     verify_evidence(run, state['repair']['plan'])
+    if 'source_plan' in state['repair']:
+        selected_solution(run, state, state['repair']['source_plan'])
     report = read_json(result_path)
     if report.get('outcome') not in ('applied','rolled-back','not-applied') or not report.get('evidence'):
         raise Fault('ACTION_NOT_ALLOWED')
@@ -417,7 +480,18 @@ def repair_result(run, state, result_path):
     if repair_id in state.get('consumed_repairs',[]):
         raise Fault('RETRY_LIMIT')
     state.setdefault('consumed_repairs',[]).append(repair_id)
+    key = state['repair'].get('trial_key')
+    if key and report['outcome'] in ('applied','rolled-back'):
+        attempts = state.setdefault('source_trials', {})
+        attempts[key] = attempts.get(key, 0) + 1
+        paths = state.setdefault('tried_source_plans', {}).setdefault(state['phase'], [])
+        if state['repair']['source_plan'] not in paths:
+            paths.append(state['repair']['source_plan'])
     state['repair'].update(status=report['outcome'], result=evidence(run,'repair-result',report), result_proofs=proofs)
+    if key and report['outcome'] in ('applied','rolled-back'):
+        history = state.setdefault('solution_history', {}).setdefault(key, [])
+        history.append({'plan':state['repair']['plan'], 'result':state['repair']['result'],
+                        'outcome':report['outcome'], 'evidence':proofs})
     next_step=('verify' if state.get('packet') else 'prepare') if state['phase']=='00-remote' else 'guided-contract'
     state.update(step=next_step,status='planned',failure=None,attempt_count=0)
     save(run,state,'repair-recorded-reverify-required')
@@ -450,6 +524,18 @@ def guided_review(run, state, report_path):
         if check.get('result')!='pass' or not isinstance(check.get('manifest'),str):
             raise Fault('ACPI_EVIDENCE_INVALID')
         proofs.extend(check_acpi_evidence(run,state.get('machine_a'),check['manifest']))
+        proofs.extend(selected_solution(run, state, report.get('source_plan'), topic='efi', require_efi=True)['proofs'])
+    elif state['phase'] == '06-devices':
+        paths = report.get('source_plans')
+        if not isinstance(paths, list) or any(not isinstance(p, str) for p in paths):
+            raise Fault('SOLUTION_REQUIRED')
+        if not set(state.get('tried_source_plans', {}).get(state['phase'], [])) <= set(paths):
+            raise Fault('SOLUTION_REQUIRED')
+        reason = report.get('no_driver_changes')
+        if not paths and not (isinstance(reason, str) and reason.strip()):
+            raise Fault('SOLUTION_REQUIRED')
+        for path in paths:
+            proofs.extend(selected_solution(run, state, path)['proofs'])
     limited = False
     for name in contract['verification']:
         check = report['checks'][name]
@@ -472,6 +558,67 @@ def guided_review(run, state, report_path):
     save(run,state,'guided-review')
 
 
+def intro_shown(run, state):
+    """Record delivery in the chat, never infer delivery from rendering output."""
+    if state.get('intro_shown'):
+        return
+    if state['phase'] != '00-remote' or state['step'] != 'import' or not state.get('prepared'):
+        raise Fault('ACTION_NOT_ALLOWED')
+    state['intro_shown'] = True
+    save(run, state, 'intro-shown')
+
+
+SETUP_INTRO = (
+    "我们先连上准备装 macOS 的电脑，看看它能装哪个版本。这一步不用插 U 盘，也不会改动分区。\n\n"
+    "**先认两台电脑**\n\n"
+    "- **A 电脑**　要装 macOS 的那台 Intel 或 AMD 电脑，现在运行 Windows。\n"
+    "- **B 电脑**　你正在和我聊天的这台。让 A 开启远程登录（SSH），我就能从 B 检查 A 的硬件、传安装文件。\n\n"
+    "**手边要有什么？**\n\n"
+    "- **现在**　两台电脑接入同一个能互相访问的网络，例如家中的路由器。你能在 A 前操作，并知道 Windows 管理员账户密码（PIN 不能代替密码）。\n"
+    "- **稍后**　能下载系统的网络、可以清空的 U 盘（建议 16 GB 起）、独立的备份位置，以及 A 上留给 macOS 的空间。安装时需要在 A 前看屏幕、用键鼠。\n\n"
+    "**全程怎么走？**　检查硬件 → 保留 Windows，备份并留出空间 → 制作 U 盘 → 你在 A 上重启安装 → 检查驱动和硬盘启动。"
+    "OpenCore 是启动菜单，第一次用它进安装程序，装好后再用它选系统。"
+)
+
+SETUP_STEPS = (
+    "\n\n1. 在 **A 电脑**的开始菜单搜索 **Windows PowerShell**，右键选择 **以管理员身份运行**。\n"
+    "2. 粘贴下方整段代码，按回车。两机间无法直接粘贴时，可先把代码存为文本文件传到 A。\n"
+    "3. 成功后把末尾两行复制到 **B 的聊天框**，将第一行的提示换成 A 的密码或 B 上密码文件的完整路径（给过可填“已提供”）。"
+    "想装的 macOS 版本也可一起写，没定就写“待推荐”。执行失败只需发回错误结果。"
+)
+
+# Human summaries at stage entry. The full checks/actions stay in the machine contract.
+PHASE_CARDS = {
+    '01-hardware': ('两台电脑已连通，我已确认可以读取 A 的信息和传送文件。',
+                    '我会查处理器、显卡、网卡和硬盘，再告诉你适合装哪个版本、哪些功能可能用不了。', '暂时无需操作。'),
+    '02-storage': ('硬件检查已有结果，开始给 Windows 和新系统安排空间。',
+                   '我会核对硬盘、备份位置和可用容量，再把具体分区和大小给你看。', '看到方案后，核对要保留的数据和留给 macOS 的容量。'),
+    '03-media': ('已核对备份和安装空间，开始制作 A 专用的启动 U 盘。',
+                 '我会在 A 的 Windows 中准备工具并读取主板资料，制作并检查启动文件。',
+                 '先备好可以清空的 U 盘。需要插入时我会提醒，清空前会请你核对是哪一只。如希望 A 免装 Python，可改用多一次重启的方案。'),
+    '04-install': ('启动 U 盘已核对，接下来要在 A 的屏幕上操作。',
+                   '用 U 盘启动后，你会看到 macOS 恢复界面。我会给你从选分区到第一次进桌面的操作清单。',
+                   '带着 U 盘到 A 旁，按本机清单操作。磁盘名称或容量对不上时，停在抹掉之前，拍照发来。'),
+    '05-macos-remote': ('A 已经进入 macOS 桌面。',
+                        '打开 macOS 的远程登录后，我就能从 B 继续检查新系统。', '在 A 打开“系统设置 → 通用 → 共享”，按接下来的指引开启远程登录。'),
+    '06-devices': ('已接入 A 的 macOS，开始逐项检查硬件。',
+                   '我会验证显卡加速、每张网卡、无线、蓝牙、音频和 USB。某项暂时修不好，会记下来并继续查其余设备。',
+                   '暂时无需操作。轮到试听、插拔设备或睡眠唤醒时，我会给你具体动作。'),
+    '07-boot': ('硬件检查的结果已记录，接下来准备让 A 拔掉 U 盘也能启动。',
+                '我会先核对硬盘上的启动分区、备份和 U 盘退路，再给你看要写入的位置。', '保留这只已能启动的 U 盘，等提示再拔出并测试。'),
+    '08-delivery': ('安装和测试已到最后整理阶段。',
+                    '我会把通过实测的功能、待处理项、备份位置和恢复步骤列在一起。', '暂时无需操作。'),
+}
+
+
+def display_card(heading, now, action, human, intro=None):
+    blocks = [heading]
+    if intro:
+        blocks.append(intro)
+    blocks.extend((f'**现在**　{now}', f'**接下来**　{action}', f'**请你**　{human}'))
+    return '\n\n'.join(blocks)
+
+
 def render_result(state, override=None):
     phase = state.get('phase','00-remote')
     contract = PHASES[phase]
@@ -481,7 +628,6 @@ def render_result(state, override=None):
     if failure:
         code = failure['code']
         summary, action, human, command = ERRORS.get(code, ERRORS['INTERNAL_ERROR'])
-        lines = [f'进度：{phase[:2]} {contract["title"]}｜异常 {code}：{summary}',f'下一步：{action}',f'需要你：{human}']
         automatic = code in ('DEPENDENCY_MISSING','SSH_TIMEOUT','SSH_REFUSED','SSH_UNREACHABLE','HOST_KEY_MISMATCH','FINGERPRINT_READ_FAILED','RESTART_REQUIRED')
         result.update(error=code,next_action='recover' if automatic else 'diagnose',resume_action=command,details=failure.get('details',{}))
         if code in ('CREDENTIAL_REQUIRED','CREDENTIAL_INVALID','AUTH_FAILED'):
@@ -496,35 +642,53 @@ def render_result(state, override=None):
             result.update(next_action='correct-efi-then-review',contract=contract)
         elif code=='SOURCE_CHANGED':
             result.update(next_action='upgrade')
-    elif state['step'] == 'prepare':
-        lines = ['进度：00 远程接入｜任务已建立','下一步：自动生成 A 端配置代码；已有连接结果可直接导入','需要你：暂时无需操作']
+        elif code in ('SOLUTION_REQUIRED', 'SOLUTION_RETRY_LIMIT'):
+            result.update(next_action='lookup-then-select-source' if code == 'SOLUTION_REQUIRED' else 'new-evidence-or-handoff',contract=contract)
+    elif state['step'] in ('init', 'prepare'):
+        summary, action, human = '已在这台电脑上准备好安装记录。', '我会准备给待安装电脑使用的连接代码。', '暂时无需操作。'
         result['next_action'] = 'prepare-or-import'
     elif state['step'] == 'import':
-        lines = ['进度：00 远程接入｜A 端固定配置代码已准备','下一步：配置并采集 A 的连接信息',
-                 '需要你：在 A 的管理员 PowerShell 运行下方代码；复制结果块到 B，替换密码／密码文件路径占位后一起发送。密码不是 PIN，已提供可填“已提供”']
+        summary = '代码会在 A 开启远程登录，设为开机自启，并允许同一局域网连接。'
+        action = '收到结果后，我会连上 A，核对电脑再检查硬件。'
+        human = '在 A 上运行一次代码。' + SETUP_STEPS
         result.update(next_action='import',script=state['prepared'])
         if state.get('recovery_reason')=='RESTART_REQUIRED':
-            lines=['进度：00 远程接入｜A 的 SSH 组件要求重启','下一步：重启后继续本机配置与检查',
-                   '需要你：保存工作并重启 A；运行下方代码，将密码占位与连接结果一起回传，已提供可填“已提供”']
+            summary = 'Windows 安装远程登录功能后，提示需要重启。'
+            human = '请先保存工作并重启 A。回到 Windows 后再操作。' + SETUP_STEPS
+        elif state.get('recovery_reason'):
+            summary = ERRORS[state['recovery_reason']][0]
+            human = '在 A 重新运行检查，把新的结果发回这里。' + SETUP_STEPS
     elif state['step'] == 'verify':
-        lines = ['进度：00 远程接入｜连接信息已接收','下一步：自动验证 SSH、身份、权限和文件传输','需要你：已有凭据则无需操作；未提供时补充账户密码取得方式']
+        summary, action, human = '已收到 A 的连接信息。', '我会从 B 实际登录，核对电脑和账户，并试传一个文件。', '暂时无需操作。'
         result['next_action'] = 'verify'
     elif state['step'] == 'repair':
-        lines = [f'进度：{phase[:2]} {contract["title"]}｜修复方案已记录，尚未认定故障解决','下一步：按授权范围处理，提交结果后重跑当前阶段验收','需要你：仅在方案确实需要现场操作或新授权时参与']
+        summary, action, human = '已找到一个可尝试的修复办法。', '我会验证修复效果，再回到这一步继续。', '暂时无需操作。需要在 A 旁测试时我会说明。'
         result['next_action'] = 'repair-result'
     elif state['step'] == 'complete':
-        lines = ['进度：08 交付｜流程记录已完成','下一步：交付实测配置、恢复方法及未解决限制','需要你：无需操作']
+        summary = '本轮安装和验证已收尾，仍有待处理项。' if state.get('status') == 'limited' else '本轮安装和验证已收尾。'
+        action, human = '我会交给你实测结果、剩余限制、备份位置和恢复方法。', '收好启动 U 盘和备份，以后需要恢复时使用。'
         result['next_action'] = 'none'
     else:
-        summary = '00 接入验证通过' if phase == '01-hardware' else '上一阶段检查记录已接收'
-        lines = [f'进度：{phase[:2]} {contract["title"]}｜{summary}',f'下一步：按本阶段合同执行：{contract["actions"][0]}','需要你：自动检查先继续，仅收集本阶段确实缺少的信息']
+        summary, action, human = PHASE_CARDS[phase]
+        reviews = state.get('guided_reviews', [])
+        if reviews and reviews[-1].get('limited'):
+            summary = '上一阶段的结果已记录，其中有你同意暂时保留的限制。'
         result.update(next_action='guided-contract',contract=contract)
         if phase=='03-media':
-            lines[2]='需要你：默认自动准备 Python 并采集；可选回复“免 Python 方案”，需额外启动 OpenCore 后回 Windows；U 盘按需插入'
+            choices = state.get('source_decisions', {}).get(phase, {}).values()
+            if not any(choice['topic'] == 'efi' for choice in choices):
+                result['next_action']='lookup-then-select-source'
+                action = '我会先找这台电脑以前成功的启动配置。没有可用备份，再找适合这台机器的现成工具。'
     if state.get('status') == 'running':
         result['next_action'] = 'resume'
-        lines = ['进度：00 远程接入｜上次验证未结束，结果尚未确认','下一步：确认旧进程结束后运行 resume，重跑验收','需要你：无需操作']
-    result['display'] = '\n'.join(lines)
+        summary, action, human = '上次连接检查还没有最终结果。', '我会确认上一次检查已结束，再继续验证。', '暂时无需操作。'
+    heading = f'**{phase[:2]} · {contract["title"]}**'
+    result['display'] = display_card(heading, summary, action, human)
+    if (result['next_action'] == 'import' and not state.get('intro_shown')
+            and not state.get('packet') and not state.get('handoff_attempted') and not state.get('recovery_reason')):
+        result['presentation_id'] = state['run_id'] + '/00-setup'
+        result['display_compact'] = result['display']
+        result['display'] = display_card(heading, summary, action, human, SETUP_INTRO)
     return result
 
 
@@ -533,12 +697,12 @@ def main():
     parser.add_argument('--run', required=True, type=Path)
     parser.add_argument('--json', action='store_true', help='Machine output including the exact display text')
     sub = parser.add_subparsers(dest='command',required=True)
-    for action in ('init','status','resume','recheck','recover','upgrade'):
+    for action in ('init','status','intro-shown','resume','recheck','recover','upgrade'):
         sub.add_parser(action)
     p = sub.add_parser('prepare'); p.add_argument('--b-ip',action='append')
     p = sub.add_parser('import'); p.add_argument('--file',required=True,type=Path)
     p = sub.add_parser('verify'); group=p.add_mutually_exclusive_group(); group.add_argument('--credential-file',type=Path); group.add_argument('--key-file',type=Path)
-    for action in ('diagnose','repair-result','review','problem'):
+    for action in ('diagnose','repair-result','review','problem','select-source'):
         p=sub.add_parser(action); p.add_argument('--file',required=True,type=Path)
     args=parser.parse_args()
     run=args.run.absolute()
@@ -548,6 +712,7 @@ def main():
         no_link(deps); sys.path.insert(0,str(deps))
     state={'phase':'00-remote','step':'init','status':'failed'}
     fault=None
+    registered=None
     try:
         if args.command=='init':
             state=initialize(run)
@@ -556,6 +721,7 @@ def main():
                 state=load(run,check_sources=args.command!='upgrade')
                 try:
                     if args.command=='upgrade': upgrade(run,state)
+                    elif args.command=='intro-shown': intro_shown(run,state)
                     elif args.command=='prepare': prepare(run,state,args.b_ip)
                     elif args.command=='import': import_handoff(run,state,args.file)
                     elif args.command=='verify': verify(run,state,args.credential_file,args.key_file)
@@ -566,9 +732,10 @@ def main():
                     elif args.command=='repair-result': repair_result(run,state,args.file)
                     elif args.command=='review': guided_review(run,state,args.file)
                     elif args.command=='problem': problem(run,state,args.file)
+                    elif args.command=='select-source': registered=select_source(run,state,args.file)
                 except Fault as exc:
-                    if exc.code=='ACTION_NOT_ALLOWED':
-                        fault={'code':exc.code}
+                    if exc.code in ('ACTION_NOT_ALLOWED','SOLUTION_REQUIRED','SOLUTION_RETRY_LIMIT'):
+                        fault={'code':exc.code,'details':exc.details}
                     else:
                         record_fault(run,state,exc)
                 except Exception as exc:
@@ -579,13 +746,15 @@ def main():
         # Do not print arbitrary exception strings, arguments or remote stderr.
         fault={'code':'INTERNAL_ERROR','exception_type':type(exc).__name__}
     output=render_result(state,fault)
+    if registered:
+        output['selected_source'] = {k:registered[k] for k in ('topic','target','kind','source','revision')}
     if fault and fault['code']=='ACTION_NOT_ALLOWED':
         output['next_action']=render_result(state)['next_action']
     if args.json:
         print(json.dumps(output,ensure_ascii=False))
     else:
         print(output['display'])
-    return 2 if fault or state.get('status')=='failed' else 0
+    return 2 if fault or (state.get('status')=='failed' and not registered) else 0
 
 
 if __name__=='__main__':

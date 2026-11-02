@@ -262,6 +262,9 @@ try { for ($i=0; $i -lt $runs; $i++) { & ([scriptblock]::Create($handoff)) } } c
         self.assertTrue(r['output_lines'][0].startswith('A_LOGIN_CREDENTIAL: '))
         self.assertIn('请将此字段替换',r['output_lines'][0])
         self.assertNotIn('credential',r['packet'])
+        self.assertIn('准备工作和远程接入',r['messages'][0])
+        self.assertIn('复制下面两行',r['messages'][-1])
+        self.assertIn('B 上和助手的聊天框',r['messages'][-1])
         self.assertTrue(any('临时关闭网络防护' in line and '验证后恢复' in line for line in r['messages']))
 
     def test_old_service_binding_is_cleared_on_existing_rule(self):
@@ -324,6 +327,7 @@ try { for ($i=0; $i -lt $runs; $i++) { & ([scriptblock]::Create($handoff)) } } c
         self.assertFalse(r['running'])
         self.assertNotIn('configure', r['calls'])
         self.assertEqual(r['packet']['status'], 'restart-required')
+        self.assertTrue(any('保存文件，重启 A' in line for line in r['messages']))
 
     def test_unknown_component_refuses_install(self):
         r = self.run_scenario('unknown')

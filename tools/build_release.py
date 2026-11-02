@@ -13,16 +13,16 @@ SKILL = ROOT / "macos-remote-install"
 sys.path.insert(0, str(SKILL / "scripts"))
 from agentkit import no_link, sha
 
-VERSION = "0.2.7"
+VERSION = "0.2.8"
 if json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))["version"] != VERSION:
     raise ValueError("Workflow version must match the package version")
 REF_NAMES = ["00-controller", "01-remote-access", "02-hardware-routing", "03-storage", "04-installer",
-             "05-boot-handoff", "06-postinstall", "07-troubleshooting", "08-state-and-tools", "09-efi-diagnostics",
+             "05-boot-handoff", "06-postinstall", "07-troubleshooting", "08-state-and-tools", "09-efi-diagnostics", "10-existing-solutions",
              "case-14700k-4070ti-super", "sources"]
 SOURCE_DOCS = [SKILL / "SKILL.md"] + [SKILL / "references" / (name + ".md") for name in REF_NAMES]
-TOP_FILES = ["README.md", "START-HERE.md", "AI-GUIDE.md", "LICENSE", ".gitignore", ".gitattributes",
+TOP_FILES = ["README.md", "START-HERE.md", "新手对话预览.md", "AI-GUIDE.md", "LICENSE", ".gitignore", ".gitattributes",
              "CONTRIBUTING.md", "TEST-FEEDBACK.md", "VALIDATION.md", "PUBLISH.md", "CHANGELOG.md"]
-SCRIPTS = ["agentkit.py", "target_guard.py", "collect-windows.ps1", "collect-macos.sh", "enable-windows-ssh.ps1", "prepare_ssh_handoff.py", "workflow.py", "ssh_transport.py", "probe-windows.ps1", "acpi_guard.py", "efi_audit.py", "metal_smoke_test.js"]
+SCRIPTS = ["agentkit.py", "target_guard.py", "collect-windows.ps1", "collect-macos.sh", "enable-windows-ssh.ps1", "prepare_ssh_handoff.py", "workflow.py", "ssh_transport.py", "probe-windows.ps1", "acpi_guard.py", "efi_audit.py", "metal_smoke_test.js", "solutions.py"]
 CODE = re.compile(r"(^```[^\n]*\n.*?^```[ \t]*$|`[^`\n]*`)", re.MULTILINE | re.DOTALL)
 
 
@@ -44,7 +44,7 @@ def make_guide():
     anchors = {p.resolve(): "section-" + p.stem.lower() for p in SOURCE_DOCS}
     content = ["# AI 远程协助安装 OpenCore 与 macOS：完整指南\n",
                f"版本 {VERSION}。此文件由 SKILL.md 与 references 合并生成。\n",
-               "Agent 运行在 B，目标为 A。单文件可用于阅读和引导；配套脚本需取得完整仓库。没有工具时必须如实降级，不得编造执行结果。\n",
+               "A 是准备安装 macOS 的 Windows 电脑，B 是你和助手聊天的电脑。初次安装可从[新手起步页](START-HERE.md)开始。要让助手执行完整流程，请使用配套脚本。\n",
                "原文维护入口为仓库 macos-remote-install；本文中的脚本路径以该技能目录为工作目录。\n"]
     for p in SOURCE_DOCS:
         t = body(p.read_text(encoding="utf-8-sig"))
@@ -74,7 +74,7 @@ def workbuddy_skill():
     metadata = {"name": "macos-remote-install", "display_name": "AI 远程安装 OpenCore 与 macOS",
                 "display_name_en": "Remote OpenCore and macOS Installation",
                 "description": "从 B 电脑远程协助 A 电脑安装、排错和验收 macOS 双系统，先核对兼容性、备份与目标身份。",
-                "description_zh": "固定流程与三项短交接；阶段 00 程序验收，异常处理后返回原步骤。",
+                "description_zh": "先认清两台电脑，再跟着助手准备、检查和安装。每一步都会说明在哪台电脑上做什么。",
                 "description_en": "Guide a separate target PC through compatibility checks, backup, installation and evidence-based validation.",
                 "version": VERSION, "author": "macos-remote-install contributors"}
     front = "---\n" + "\n".join(k + ": " + json.dumps(v, ensure_ascii=False) for k, v in metadata.items()) + "\n---\n\n"
@@ -88,7 +88,7 @@ def source_files():
     selected += [SKILL / "scripts" / name for name in SCRIPTS]
     selected += [SKILL / "workflow.json", SKILL / "upgrades.json"]
     selected += [SKILL / "LICENSE", ROOT / "tests" / "test_helpers.py", ROOT / "tests" / "test_collect_windows.py", ROOT / "tests" / "test_ssh_handoff.py", ROOT / "tests" / "test_prepare_ssh_handoff.py",
-                 ROOT / "tests" / "test_workflow.py", ROOT / "tests" / "test_acpi_guard.py", ROOT / "tests" / "test_source_identity.py", ROOT / "tests" / "test_efi_audit.py", ROOT / "tools" / "build_release.py", ROOT / ".github" / "ISSUE_TEMPLATE" / "installation-feedback.md"]
+                 ROOT / "tests" / "test_workflow.py", ROOT / "tests" / "test_acpi_guard.py", ROOT / "tests" / "test_source_identity.py", ROOT / "tests" / "test_efi_audit.py", ROOT / "tests" / "test_solutions.py", ROOT / "tools" / "build_release.py", ROOT / ".github" / "ISSUE_TEMPLATE" / "installation-feedback.md"]
     for p in selected:
         no_link(p)
         if not p.is_file(): raise ValueError(f"Missing public source file: {p.name}")

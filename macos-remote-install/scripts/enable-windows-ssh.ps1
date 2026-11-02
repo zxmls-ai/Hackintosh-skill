@@ -15,7 +15,7 @@
         }
         return $true
     }
-    Write-Host '进度：00 远程接入｜正在安装、校验并生成连接信息，请等待。'
+    Write-Host '00 准备工作和远程接入　正在为这台待安装的电脑（A）开启并检查远程登录，请稍候。'
     try {
         $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
         if (-not $isAdmin) { throw '请在 A 电脑以管理员身份打开 Windows PowerShell，再粘贴整块代码。' }
@@ -124,14 +124,15 @@
         $report.error = $_.Exception.Message
     }
     if ($report.status -eq 'local-ready') {
-        $serverLabel = if ($report.checks.server -eq 'existing') {'复用已有 SSH'} else {'已安装 SSH'}
-        Write-Host ('进度：00 远程接入｜' + $serverLabel + '，本机配置与检查完成。')
-        Write-Host '下一步：B 验证连接；若 360、火绒或腾讯电脑管家拦截，请放行 OpenSSH/TCP 22；无法放行时可临时关闭网络防护重试，验证后恢复。保留拦截可能导致 SSH 连接失败。'
-        Write-Host '需要你：复制下面两行到 B，把第一行占位替换为密码或 B 上密码文件路径后一起发送；已提供可填“已提供”。目标 macOS 版本未提供时一并补充。'
+        Write-Host 'A 上的远程登录已准备好。接下来由 B 上的助手试着连进来。'
+        Write-Host '遇到 360、火绒或电脑管家拦截时，请放行 OpenSSH（TCP 22）。如选择临时关闭网络防护，验证后恢复。'
+        Write-Host '请复制下面两行，粘贴到 B 上和助手的聊天框。按第一行提示填写后一起发送。想装的 macOS 版本也可一起写，不清楚就写“未定”。'
+    } elseif ($report.status -eq 'restart-required') {
+        Write-Host 'Windows 需要重启才能继续。请保存文件，重启 A，再用管理员身份运行刚才的整块代码。'
+        Write-Host '如果重启后仍看到这条提示，把下面这行结果发到 B 上和助手的聊天框。'
     } else {
-        Write-Host ('进度：00 远程接入｜未完成：' + $step)
-        Write-Host '下一步：Agent 根据结果处理错误或安排重启。'
-        Write-Host '需要你：将下面整行结果发给 B。'
+        Write-Host ('A 上的远程登录还没有准备好。停在“' + $step + '”。')
+        Write-Host '请复制下面一整行，发到 B 上和助手的聊天框，助手会依据错误提示继续排查。'
     }
     if ($report.status -eq 'local-ready') {
         Write-Output 'A_LOGIN_CREDENTIAL: 请将此字段替换为 A 电脑的登录密码，或 B 电脑上包含登录密码的文件完整路径；已提供可填“已提供”'

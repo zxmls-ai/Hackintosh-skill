@@ -1,6 +1,6 @@
-# 01 远程接入与机器身份
+# 远程登录与机器身份 · 阶段 00 和 05 参考
 
-标准模式由 [流程控制器](00-controller.md) 调用固定脚本与连接验证；本参考用于解释分流和故障诊断。不要据此另写一个临时连接器。没有执行能力时才能明确降级为人工指导。
+标准模式由 [流程控制器](00-controller.md) 调用固定脚本与连接验证。本文供 Agent 在阶段 00“准备工作和远程接入”及安装后再次连接 macOS 时查阅；文件编号 01 用于查找文档。首次交接先说明 A、B 与准备工作。日常只把与用户当前动作有关的一段说清楚。
 
 ## 先在 B 检查能力
 
@@ -8,17 +8,17 @@
 
 至少需要：本地文件与终端、SSH/SFTP、HTTPS 下载。看图能力用于处理 BIOS／启动报错；没有时请用户转录关键文字或使用可用的图像工具。Python 不存在时可用 PowerShell／系统工具完成等价检查；不得假装调用成功。B 为 macOS 或 Linux 时沿用同样流程，替换本地命令语法，A 的 Windows 命令仍由远端 PowerShell 执行。
 
-优先使用客户端已有 SSH 连接器或系统 SSH。禁止为本任务关闭 B/A 的整个防火墙或绕过客户端审批。两台电脑先保持同一可达局域网；远程跨网时需要用户已有且授权的 VPN 或其他连接，不能擅自做公网端口转发。
+标准模式的阶段 00 使用控制器自带连接验证。通过后，后续阶段可使用已有 SSH 客户端，以已核对的身份重新接入。禁止为本任务关闭 B/A 的整个防火墙或绕过客户端审批。两台电脑先保持同一可达局域网；远程跨网时需要用户已有且授权的 VPN 或其他连接，不能擅自做公网端口转发。
 
 ## A 是 Windows：先账户，再服务器，再连接
 
-一次给出当前需要的整块操作，并说明在 A 还是 B；遵循主入口三项短交接，不把本参考全文发给用户。已经能连接的 SSH 直接复用并核对身份，不要求重装或更换认证方式。
+先让用户认出 A 是待安装电脑，B 是当前聊天电脑。“远程登录（SSH）”让 B 能在 A 的 Windows 里执行检查和传送文件，用户随后只需在需要现场操作时动手。给出本次整块操作，在每次换电脑时标明“在安装电脑 A 上”或“回到聊天电脑 B”。已经能连接的 SSH 直接复用并核对身份。
 
 ### 00-1 先确认账户与登录方式
 
 默认以 **Windows 实际账户名＋账户密码** 完成首次接入，公钥不是前置条件。用户已有可用密钥或明确选择公钥时沿用其选择。[微软文档确认 Windows OpenSSH 支持 password 与 publickey](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh-server-configuration)。
 
-在开始安装 SSH 前告诉用户：
+正常交接只需说“准备好 A 的 Windows 账户密码，平时解锁用的 PIN 在这里用不了”。以下是给 Agent 的分流条件，当账户情况确实有需要时再选相应说明：
 
 1. 采用密码登录时，A 的账户应有**非空账户密码**。平时自动登录、使用 PIN 或指纹，并不证明自己知道账户密码；Windows Hello PIN 不能填进 SSH 的密码提示。这个条件针对密码登录，不代表所有密钥登录都要求先设置密码。
 2. 本地账户没有密码：在 A 的“设置→账户→登录选项→密码→添加”设置，由用户自己输入。已有密码则不改。入口缺失时先确认账户类型，不关闭空密码限制来绕过。[空密码限制说明](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/accounts-limit-local-account-use-of-blank-passwords-to-console-logon-only)
@@ -29,7 +29,7 @@
 
 ### 00-2 统一使用管理员 PowerShell
 
-直接向用户展示 [SKILL 主入口](../SKILL.md) 的完整配置代码，并说明在 A 搜索 Windows PowerShell、右键以管理员身份运行、粘贴整块并回车。阶段 00 不再走可选功能／services.msc，也不把“GUI 优先”套用到这一步。代码源为 `scripts/enable-windows-ssh.ps1`；Windows PowerShell 5.1 的脚本文件使用 UTF-8 BOM。
+完成[第一次见面时的准备说明](00-controller.md)后，在同一条回复交付整块代码。标准模式读取 `prepare` 返回的文件，人工指导时使用 [SKILL 主入口](../SKILL.md) 的固定模板。在 A 搜索 Windows PowerShell、右键以管理员身份运行、粘贴整块并回车。阶段 00 统一走终端。代码源为 `scripts/enable-windows-ssh.ps1`；Windows PowerShell 5.1 的脚本文件使用 UTF-8 BOM。
 
 脚本合并执行安装检查、自动启动、监听、防火墙和连接信息采集；始终输出三项短提示和一个 `SSH_HANDOFF_V1` 结果；成功时在同一复制块前面增加 `A_LOGIN_CREDENTIAL` 密码／文件路径占位，提醒用户替换后一次发送。实际改动仅限安装缺失的 OpenSSH Server、sshd 启动类型与启动操作、名为 `Hackintosh-Skill-SSH-In-TCP` 的专用入站规则。已安装服务不叠装，已有会话不主动重启，用户名／密码与 sshd_config 不自动修改。[微软服务安装与自启说明](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse)
 
@@ -84,7 +84,7 @@ ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no -l 实际账
 
 1. B 发脚本前自行采集活动接口地址／前缀，填入 `$BIPv4`；填入前用 IPv4 解析检查，不能把任意文字拼进 PowerShell。无法获得时不增加人工查询，保持空并在结果中记录未知。
 2. A 按实际前缀比较每个有效 IPv4 与 B 的候选地址，保留多网卡信息。不能按“前三段一样”判断；前缀不同、VPN、路由跨网、同网段隔离都可能影响结果。B 收到结果后结合自身前缀／路由复核，并实际连接 TCP 22；不把 ping 失败或网段不同直接判为不可达。
-3. B 只针对用户回传的 A 地址候选检查，不扫整个网段。先核对握手指纹再发送凭据，成功后连续完成身份、权限、SFTP 和硬件采集。将详细证据写入私有任务目录，对用户只汇报三项。
+3. B 只针对用户回传的 A 地址候选检查。先核对握手指纹再发送凭据，成功后连续完成身份、权限、SFTP 和硬件采集。证据留在私有目录；交接时可告诉用户“已经连上安装电脑，也试过传送文件。接下来我会读取硬件，判断适合安装哪个版本。现在不用操作。”
 4. 本地结果中的 `local-ready` 不等于远程已接通；`restart-required/failed` 不是成功。脚本未取得指纹或用了自定义服务路径时，按具体错误只补做必要检查，不重跑整条安装流程。
 5. 只收当前缺失项。用户已经提供密码或目标版本时直接复用；未知版本可以写“未确定”，等采集硬件后由 Agent 推荐。密码不进入结果 JSON、任务状态或公开报告。
 
@@ -102,6 +102,8 @@ ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no -l 实际账
 - SSH 的 GUI 程序可能运行在用户看不见的会话。优先 CLI；确实只能 GUI 时交给用户操作或使用明确可用的桌面控制工具，不无限重复启动程序。
 
 ## A 是 macOS：安装后重新接管
+
+用户第一次到达桌面时，先确认“macOS 已经装好”，再说明为什么又要开一次远程登录：现在运行的是新系统，需要在 macOS 里授权 B 连接，才能继续检验显卡、网络和声音。随后只交付在 A 上的菜单路径和需要带回 B 的信息。
 
 将开启共享、取得当前地址／用户名／主机指纹作为本次人工交接的一组动作，一次给出、一次收回；能从已有受信连接自动读取的内容不让用户查询。需终端辅助时由 Agent 合并成一块只读命令，避免让用户每执行一行就回复。macOS 的新主机密钥仍需核对，不能把旧 Windows 指纹直接套用。
 

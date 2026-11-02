@@ -38,7 +38,14 @@ class ACPIGuardTests(unittest.TestCase):
     def review(self,include_acpi=True):
         checks={key:{'result':'pass','basis':'tool','evidence':[self.rel(self.capture)]} for key in flow.PHASES['03-media']['verification']}
         if include_acpi: checks['acpi_tables']['manifest']=self.write_manifest()
-        return self.put('review.json',json.dumps({'phase':'03-media','checks':checks}).encode())
+        original=self.put('staging/original/OC/config.plist',plistlib.dumps({'ACPI':{},'Kernel':{},'UEFI':{}}))
+        source={'topic':'efi','target':'test board install','environment':'synthetic x86_64',
+                'hardware_evidence':self.rel(self.raw),'candidates':[{'kind':'baseline','source':'local',
+                'status':'usable','revision':'snapshot-01','fit':'same synthetic board and stage',
+                'evidence':self.rel(self.assessment),'base_config':self.rel(original)}]}
+        plan=self.put('evidence/source.json',json.dumps(source).encode())
+        flow.select_source(self.run,self.state,plan)
+        return self.put('review.json',json.dumps({'phase':'03-media','checks':checks,'source_plan':self.rel(plan)}).encode())
 
     def test_real_table_bytes_and_matching_efi_can_advance(self):
         flow.guided_review(self.run,self.state,self.review())
@@ -48,6 +55,16 @@ class ACPIGuardTests(unittest.TestCase):
 
     def test_written_pass_without_tables_cannot_advance(self):
         with self.assertRaises(Fault): flow.guided_review(self.run,self.state,self.review(False))
+        self.assertEqual(self.state['phase'],'03-media')
+
+    def test_media_review_with_valid_acpi_but_no_source_does_not_advance(self):
+        file=self.review()
+        report=flow.read_json(file)
+        del report['source_plan']
+        path=self.put('missing-source.json',json.dumps(report).encode())
+        with self.assertRaises(Fault) as caught:
+            flow.guided_review(self.run,self.state,path)
+        self.assertEqual(caught.exception.code,'SOLUTION_REQUIRED')
         self.assertEqual(self.state['phase'],'03-media')
 
     def test_bad_bytes_rejected_even_if_hash_matches(self):
