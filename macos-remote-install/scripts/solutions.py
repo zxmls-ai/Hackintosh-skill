@@ -95,7 +95,7 @@ def is_https(source):
     return bool(url.scheme == 'https' and url.hostname and not url.username and not url.password)
 
 
-def assess(run, relative, *, topic=None, require_efi=False):
+def assess(run, relative, *, topic=None, require_efi=False, efi_route=None):
     """Resolve the highest viable tier; frozen files prove provenance, not applicability."""
     try:
         proofs = [proof(run, relative)]
@@ -122,9 +122,22 @@ def assess(run, relative, *, topic=None, require_efi=False):
             if row.get('kind') not in KINDS or row.get('status') not in ('usable', 'excluded', 'unchecked'):
                 raise PlanError('unknown candidate kind or status')
 
+        route = efi_route if group == 'efi' else None
+        if route not in (None, 'a', 'b', 'c'):
+            raise PlanError('unknown user EFI choice')
+        rapid = 'https://github.com/JeoJay127/RapidEFI-Tool'.casefold()
+        official = 'https://github.com/acidanthera/OpenCorePkg'.casefold()
         checked = set()
-        for kind in KINDS:
+        kinds = KINDS if route is None else (('project',) if route == 'a' else ('recipe',))
+        for kind in kinds:
             tier = [row for row in rows if row.get('kind') == kind]
+            if route:
+                tier = [row for row in tier if (
+                    (route == 'a' and str(row.get('source', '')).rstrip('/').casefold() == rapid)
+                    or (route == 'b' and str(row.get('source', '')).rstrip('/').casefold() not in (rapid, official))
+                    or (route == 'c' and (str(row.get('source', '')).rstrip('/').casefold() == official
+                        or str(row.get('source', '')).casefold().startswith(official + '/')))
+                )]
             usable = []
             for row in tier:
                 if row['status'] == 'unchecked':
@@ -141,9 +154,9 @@ def assess(run, relative, *, topic=None, require_efi=False):
                         raise PlanError('pin release, commit or baseline snapshot')
                     usable.append(row)
             if usable:
-                if kind == 'recipe' and not any(r.get('kind') == 'project' and r['status'] == 'excluded' for r in rows):
+                if kind == 'recipe' and route is None and not any(r.get('kind') == 'project' and r['status'] == 'excluded' for r in rows):
                     raise PlanError('record upstream tool or driver search before recipe fallback')
-                if kind == 'recipe' and group == 'efi':
+                if kind == 'recipe' and group == 'efi' and route is None:
                     if any(card['source'].casefold() not in checked for card in CARDS['efi']):
                         raise PlanError('check both EFI generators before template fallback')
                 row = usable[0]
@@ -183,12 +196,13 @@ def main():
     check = subs.add_parser('check')
     check.add_argument('--run', required=True, type=Path)
     check.add_argument('--file', required=True, help='Private plan path relative to run')
+    check.add_argument('--efi-route', choices=('a','b','c'), help='Use the EFI route explicitly selected by the user')
     args = parser.parse_args()
     if args.command == 'lookup':
         result = lookup(args.topic, args.target)
     else:
         try:
-            result = assess(args.run, args.file)
+            result = assess(args.run, args.file, efi_route=args.efi_route)
         except Fault as exc:
             print(json.dumps({'next': 'research-or-handoff', 'error': exc.code, **exc.details}, ensure_ascii=False))
             return 2

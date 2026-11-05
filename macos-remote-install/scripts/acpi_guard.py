@@ -55,6 +55,8 @@ def check_acpi_evidence(run, machine, manifest_path):
         target=debug.get('Target')
         if type(target) is not int or target & 0x41 != 0x41 or debug.get('AppleDebug') is not True:
             raise Fault('EFI_DIAGNOSTICS_INVALID')
+        if config.get('Misc',{}).get('Boot',{}).get('HideAuxiliary') is not False:
+            raise Fault('EFI_PICKER_INVALID')
         proof(manifest['assessment'])
         expected=set()
         for entry in config['ACPI']['Add']:

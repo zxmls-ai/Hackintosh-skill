@@ -22,7 +22,7 @@ class ACPIGuardTests(unittest.TestCase):
         self.state.update(phase='03-media',step='guided-contract',machine_a=copy.deepcopy(MACHINE))
         self.raw=self.put('inventory/acpi/DSDT.aml',synthetic_table(b'DSDT'))
         self.patch=self.put('staging/EFI/OC/ACPI/Test.aml',synthetic_table(b'SSDT'))
-        self.config=self.put('staging/EFI/OC/config.plist',plistlib.dumps({'ACPI':{'Add':[{'Enabled':True,'Path':'Test.aml'}]},'Misc':{'Debug':{'Target':67,'AppleDebug':True}}}))
+        self.config=self.put('staging/EFI/OC/config.plist',plistlib.dumps({'ACPI':{'Add':[{'Enabled':True,'Path':'Test.aml'}]},'Misc':{'Boot':{'HideAuxiliary':False},'Debug':{'Target':67,'AppleDebug':True}}}))
         self.capture=self.put('evidence/capture.txt',b'Synthetic Windows capture fixture; not real hardware')
         self.assessment=self.put('evidence/assessment.txt',b'Synthetic namespace and firmware review')
         self.manifest={'schema':'acpi-evidence-v1','machine_uuid':MACHINE['uuid'],'method':'windows-python',
@@ -44,6 +44,11 @@ class ACPIGuardTests(unittest.TestCase):
                 'status':'usable','revision':'snapshot-01','fit':'same synthetic board and stage',
                 'evidence':self.rel(self.assessment),'base_config':self.rel(original)}]}
         plan=self.put('evidence/source.json',json.dumps(source).encode())
+        source['candidates'][0]['status']='excluded'
+        source['candidates'].append({**source['candidates'][0], 'kind':'project',
+            'source':'https://github.com/JeoJay127/RapidEFI-Tool','status':'usable'})
+        plan.write_text(json.dumps(source),encoding='utf-8')
+        flow.choose_efi(self.run,self.state,'a')
         flow.select_source(self.run,self.state,plan)
         return self.put('review.json',json.dumps({'phase':'03-media','checks':checks,'source_plan':self.rel(plan)}).encode())
 
@@ -93,7 +98,7 @@ class ACPIGuardTests(unittest.TestCase):
         with self.assertRaises(Fault): check_acpi_evidence(self.run,MACHINE,self.write_manifest())
 
     def test_no_custom_add_is_allowed_only_with_explanation(self):
-        self.config.write_bytes(plistlib.dumps({'ACPI':{'Add':[]},'Misc':{'Debug':{'Target':67,'AppleDebug':True}}}))
+        self.config.write_bytes(plistlib.dumps({'ACPI':{'Add':[]},'Misc':{'Boot':{'HideAuxiliary':False},'Debug':{'Target':67,'AppleDebug':True}}}))
         self.manifest.update(config=self.ref(self.config),patches=[])
         for reason in (None,False,[],{},123,'  '):
             self.manifest['no_add_reason']=reason
@@ -131,6 +136,20 @@ class ACPIGuardTests(unittest.TestCase):
         flow.guided_review(self.run,self.state,self.review())
         self.raw.write_bytes(b'changed')
         with self.assertRaises(Fault): flow.load(self.run)
+
+    def test_install_picker_must_show_auxiliary_entries_as_a_boolean(self):
+        for value in (True, 'false', 0, None):
+            with self.subTest(value=value):
+                config=plistlib.loads(self.config.read_bytes())
+                if value is None:
+                    config['Misc']['Boot'].pop('HideAuxiliary',None)
+                else:
+                    config['Misc']['Boot']['HideAuxiliary']=value
+                self.config.write_bytes(plistlib.dumps(config))
+                self.manifest['config']=self.ref(self.config)
+                with self.assertRaises(Fault) as error:
+                    check_acpi_evidence(self.run,MACHINE,self.write_manifest())
+                self.assertEqual(error.exception.code,'EFI_PICKER_INVALID')
 
     def seed_legacy(self,phase):
         reviews=[]

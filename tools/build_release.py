@@ -13,7 +13,7 @@ SKILL = ROOT / "macos-remote-install"
 sys.path.insert(0, str(SKILL / "scripts"))
 from agentkit import no_link, sha
 
-VERSION = "0.2.8"
+VERSION = "0.2.9"
 if json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))["version"] != VERSION:
     raise ValueError("Workflow version must match the package version")
 REF_NAMES = ["00-controller", "01-remote-access", "02-hardware-routing", "03-storage", "04-installer",
@@ -22,7 +22,7 @@ REF_NAMES = ["00-controller", "01-remote-access", "02-hardware-routing", "03-sto
 SOURCE_DOCS = [SKILL / "SKILL.md"] + [SKILL / "references" / (name + ".md") for name in REF_NAMES]
 TOP_FILES = ["README.md", "START-HERE.md", "新手对话预览.md", "AI-GUIDE.md", "LICENSE", ".gitignore", ".gitattributes",
              "CONTRIBUTING.md", "TEST-FEEDBACK.md", "VALIDATION.md", "PUBLISH.md", "CHANGELOG.md"]
-SCRIPTS = ["agentkit.py", "target_guard.py", "collect-windows.ps1", "collect-macos.sh", "enable-windows-ssh.ps1", "prepare_ssh_handoff.py", "workflow.py", "ssh_transport.py", "probe-windows.ps1", "acpi_guard.py", "efi_audit.py", "metal_smoke_test.js", "solutions.py"]
+SCRIPTS = ["agentkit.py", "target_guard.py", "collect-windows.ps1", "collect-macos.sh", "enable-windows-ssh.ps1", "prepare_ssh_handoff.py", "workflow.py", "ssh_transport.py", "probe-windows.ps1", "acpi_guard.py", "efi_audit.py", "metal_smoke_test.js", "solutions.py", "find-rapidefi-output.ps1"]
 CODE = re.compile(r"(^```[^\n]*\n.*?^```[ \t]*$|`[^`\n]*`)", re.MULTILINE | re.DOTALL)
 
 
@@ -88,7 +88,7 @@ def source_files():
     selected += [SKILL / "scripts" / name for name in SCRIPTS]
     selected += [SKILL / "workflow.json", SKILL / "upgrades.json"]
     selected += [SKILL / "LICENSE", ROOT / "tests" / "test_helpers.py", ROOT / "tests" / "test_collect_windows.py", ROOT / "tests" / "test_ssh_handoff.py", ROOT / "tests" / "test_prepare_ssh_handoff.py",
-                 ROOT / "tests" / "test_workflow.py", ROOT / "tests" / "test_acpi_guard.py", ROOT / "tests" / "test_source_identity.py", ROOT / "tests" / "test_efi_audit.py", ROOT / "tests" / "test_solutions.py", ROOT / "tools" / "build_release.py", ROOT / ".github" / "ISSUE_TEMPLATE" / "installation-feedback.md"]
+                 ROOT / "tests" / "test_workflow.py", ROOT / "tests" / "test_acpi_guard.py", ROOT / "tests" / "test_source_identity.py", ROOT / "tests" / "test_efi_audit.py", ROOT / "tests" / "test_solutions.py", ROOT / "tests" / "test_rapidefi_output.py", ROOT / "tools" / "build_release.py", ROOT / ".github" / "ISSUE_TEMPLATE" / "installation-feedback.md"]
     for p in selected:
         no_link(p)
         if not p.is_file(): raise ValueError(f"Missing public source file: {p.name}")

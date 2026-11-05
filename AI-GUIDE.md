@@ -1,6 +1,6 @@
 # AI 远程协助安装 OpenCore 与 macOS：完整指南
 
-版本 0.2.8。此文件由 SKILL.md 与 references 合并生成。
+版本 0.2.9。此文件由 SKILL.md 与 references 合并生成。
 
 A 是准备安装 macOS 的 Windows 电脑，B 是你和助手聊天的电脑。初次安装可从[新手起步页](START-HERE.md)开始。要让助手执行完整流程，请使用配套脚本。
 
@@ -36,7 +36,7 @@ B 能运行 Python 时，先读 [标准流程控制器](#section-00-controller)�
 
 源码升级遇到 LF／CRLF 差异时使用控制器已登记的迁移能力。以 `workflow.py status` 核对版本和阶段，旧 NEXT.md 只作线索。工具探索、临时假设和逐文件检查留在私有日志。核对完整证据后再下结论。
 
-**03 组装 EFI、04 引导故障、06 设备修复都从 [现成方案入口](#section-10-existing-solutions) 开始。** 在 B 运行 `python scripts/solutions.py lookup <主题> --target "<本机板型／设备ID>"`，按输出核对同机基线和上游项目，由控制器 `select-source` 登记选择。生成器负责输出第一份配置，Agent 比较差异并适配。连续无效的同来源试验按控制器错误码回到有依据的来源或交接该项。
+**03 组装 EFI、04 引导故障、06 设备修复都从 [现成方案入口](#section-10-existing-solutions) 开始。** 新建 EFI 先让用户选 a／b／c；随后在 B 运行 `python scripts/solutions.py lookup <主题> --target "<本机板型／设备ID>"`，按所选路线核对来源，由控制器 `select-source` 登记。保留生成器产物、实际案例原版或官方 Sample，再比较差异并适配。连续无效的同来源试验按控制器错误码回到有依据的来源或交接该项。
 
 下载 GitHub 工具、源码或驱动时，按 [文件下载与局域网中转](#section-04-installer) 核对实际下载端和具体资产。A 拉取失败就测 B，B 可达时由 B 校验并经 SFTP 中转；两端均失败时使用已有可信缓存或离线包，继续其他可做的检查。
 
@@ -44,7 +44,11 @@ B 能运行 Python 时，先读 [标准流程控制器](#section-00-controller)�
 
 用户只需一次 A 端配置与结果回传；已有完整可信结果直接导入，已有凭据直接使用。B 的 Python／工具不可用时明确标为“人工指导模式”，按下面参考执行，不伪造控制器输出。用户未要求切换模式时，不因为某个检查失败而绕过程序改用自由操作。
 
-**EFI 决策顺序：** 阶段 03 组装前和 04 首次启动失败后，必须读取 [EFI 固定决策与排错流程](#section-09-efi-diagnostics)。先检查是否有同机、同阶段成功基线；没有时优先评估原作者工具，最后才按官方 Sample 与本机证据逐项构建。不得凭记忆从零编造参数。使用 `efi_audit.py` 检查配置启用状态、条件、版本依据和完整文件差异，部署后对实际回读再核对。每轮保存独立试验目录，区分事实、假设、组合对照与单项验证；校验通过不等于能启动，多项修改后有效不等于已找到某一根因。连续两轮无新证据，返回基线／部署／日志核对，不继续堆补丁。此顺序是 Agent 的执行要求，当前控制器不自动证明所有语义判断。
+**EFI 路线先让用户选：** 新任务进入 03，原样展示控制器的 a／b／c 选项。a 为 RapidEFI-Tool 生成后适配（推荐），b 为查找相似配置并适配，c 为 AI 按官方 Sample 与本机证据生成。用户选好后执行 `choose-efi --choice a|b|c`，再 `lookup → select-source`；已有明确选择直接登记，不重复提问。不能自动改选另一条路线，也不能让用户手工完成具备桌面自动化能力的 Agent 可以完成的点击。RapidEFI 的固定操作、双机自动化分工和桌面产物定位见 [现成方案入口](#section-10-existing-solutions)。
+
+**EFI 审计与排错：** 阶段 03 组装前和 04 首次启动失败后，必须读取 [EFI 固定决策与排错流程](#section-09-efi-diagnostics)。同机成功基线保留为对照；本轮按用户选择的路线生成。使用 `efi_audit.py` 检查配置启用状态、条件、文件差异和版本依据，部署后核对回读。连续两轮无新证据时回到基线／部署／日志核对，再依据新证据或交接继续。任一路线都要通过原有 ACPI、来源、校验及写后回读门槛。
+
+**首次进入 OpenCore：** 生成器原始配置留档，在安装用测试副本设 `Misc → Boot → HideAuxiliary=false`，写盘后回读确认；阶段 03 会检查布尔值 false。人类交接说明文字菜单用上下、图形菜单用左右，回车启动；保留兜底提示“如果开机只看到 Windows，按空格展开隐藏项”。按空格仍无条目才回到介质诊断。菜单外观由实际 PickerMode、OpenCanopy 与资源决定。[安装现场清单](#section-05-boot-handoff)
 
 ## 用户会看到怎样的回复
 
@@ -306,6 +310,8 @@ B 能运行 Python 时，先读 [标准流程控制器](#section-00-controller)�
 <a id="section-00-controller"></a>
 
 # 00 准备工作和远程接入 · 流程控制器参考
+
+v0.2.9 新任务进入阶段 03 时会返回 `next_action=choose-efi` 和 a／b／c。展示给用户后，依据真实回复执行 `python scripts/workflow.py --run "任务目录" --json choose-efi --choice a`（或 b、c），再按新的 `next_action` 查来源并登记。首次 `select-source` 缺少选择时返回 `EFI_ROUTE_REQUIRED`。既有任务已登记 EFI 来源时保留原路线继续，避免升级中途重复提问或重做产物。各路线的来源字段见 [现成方案入口](#section-10-existing-solutions)。
 
 ## 定位与实际覆盖
 
@@ -818,11 +824,15 @@ SysReport 路线是**采集启动**：使用所选 OC 版本文档要求的 DEBU
 
 ## EFI 组装
 
-使用 [固定的现成方案登记步骤](#section-10-existing-solutions)。先查生成器能否直接导入 A 的资料或需要一次可见桌面交接，再生成新的测试副本。03 的阶段报告顶层填写 `source_plan`，原始配置与实际修改后的配置分别保存。
+先展示 [a／b／c EFI 路线选择与 RapidEFI 固定步骤](#section-10-existing-solutions)，用户选好后通过 `choose-efi` 登记，再执行对应的来源登记。使用 RapidEFI 时，有桌面工具就自动完成可见 GUI 操作；B 上生成时导入 A 的资料。默认从实际运行账户的桌面或成功提示路径取回原始产物，不固定去 C 盘根目录找。03 的阶段报告顶层填写 `source_plan`，原始配置与修改后的配置分别保存。
 
-先读 [EFI 固定决策流程](#section-09-efi-diagnostics)。按“同机同阶段成功基线 → 有明确支持证据的原作者生成工具 → 官方 Sample.plist 与平台文档逐项构建”选择起点，并保存选择依据。不能在已有适用成功基线时无视它、默认从头设计；也不能将其他机器的 EFI 当作已验证基线。采用原版基线对照和添加 DEBUG／日志的诊断变体须分别记录。
+先读 [EFI 固定决策流程](#section-09-efi-diagnostics)。本轮按已登记的 a／b／c 路线选择起点，保留同机同阶段成功基线作对照。未指定路线的旧任务与后续故障仍先找适用基线，再查生成工具和官方模板。不能把其他机器的 EFI 当作本机已验证基线，也不能把用户明确选的路线静默换成另一条。原版基线对照和添加 DEBUG／日志的诊断变体须分别记录。
 
-没有适用基线／工具时，从目标版本 Sample.plist 和 X64 目录开始，按硬件分支建立 EFI。RapidEFI、OC 配置器等生成结果同样须审查和校验；只有 UI 的工具不能假设存在 CLI，SSH 启动看不见的 GUI 不算生成成功。来源工具本身不决定 EFI 正确与否，实际采集、逐项核对和启动结果才提供证据。
+用户选择 c，或同意在现成路线无法使用后改选时，从目标版本 Sample.plist 和 X64 目录开始，按硬件分支建立 EFI。RapidEFI 等生成结果同样须审查；SSH 启动看不见的 GUI 不算生成成功。
+
+**安装 EFI 默认展开辅助条目。** 生成器原始产物归档后，Agent 在本轮测试副本中把 `Misc → Boot → HideAuxiliary` 设为布尔值 **false**（不能是字符串 `"false"`），再执行校验、写盘和实际回读。a／b／c 三条路线一致；保留原始副本便于对照。阶段 03 验收会检查该值，仍隐藏、缺失或类型错误时返回 `EFI_PICKER_INVALID`。升级时已完成的安装阶段不倒退。
+
+按 [启动交接](#section-05-boot-handoff)核对实际 PickerMode、OpenCanopy 与资源文件，保留工具原有的文字／图形外观；不能以菜单外观判定 OC 版本。人类指引补一句兜底：**“如果开机只看到 Windows，按空格展开隐藏项。”** 若出现这种情况，回 Windows 后核对实际启动的是否是刚写好的配置。
 
 按需要加入文件：必要 ACPI、VirtualSMC、Lilu 及实际需要的插件、网络驱动、USB 映射等；遵循依赖顺序。不要为了“通用”加载所有网卡、全部显卡补丁和大量来源不明 SSDT。具体设置以原作者相应系统版本说明为准，未知参数先查证。
 
@@ -885,7 +895,18 @@ com.apple.recovery.boot/
 
 根据主板型号／官方手册给出进入设置和一次性启动菜单的按键，未知时让用户拍启动提示而非猜测。保留原 BIOS 设置照片。仅调整当前方案需要的选项；不在同一次试验中随意切换存储模式、CPU 超频和所有电源选项。
 
-选择 UEFI U 盘进入 OpenCore，然后选择安装恢复环境。没有安装项时先检查过滤／隐藏条目和介质文件；能看到菜单不等于安装环境能加载。故障时先定位阶段：固件没找到 OC、OC 没找到安装项、加载镜像失败、内核阶段、图形界面阶段。
+交接前从实际 U 盘回读 `config.plist`，确认 `Misc → Boot → HideAuxiliary=false`，默认显示恢复等辅助项；这是阶段 03 的必查项。再核对实际 PickerMode、OpenCanopy 与资源。文字和图形菜单都可能出现，不能仅凭版本推断外观。用户说明仍保留空格兜底，以应对选错旧介质或实际启动了其他配置。
+
+### 发给用户：第一次从 U 盘启动
+
+把主板按键和 U 盘名称填成现场值，一次给完整动作。不要预设用户已熟悉 OC。
+
+1. 保存工作并重启 A，按 `<启动菜单键>`，选 `<UEFI U盘启动项>`。
+2. 看到 **OpenCore** 菜单后，**文字菜单用上下方向键，图形图标菜单用左右方向键选中，再按回车启动**。部分主题支持鼠标，可用时也可点击；没有鼠标仍可用键盘。
+3. **如果只看到 Windows，先按一次空格键**，展开隐藏的辅助条目。找到本次 U 盘对应的 **macOS 安装／恢复图标**再回车。它可能显示为 U 盘卷标、`macOS Base System`、`Recovery` 或带外置／dmg 标识的名称，以 Agent 核对的本次介质为准。
+4. 进入 macOS 恢复首页，继续下面的安装清单。**按空格后仍无安装／恢复项**，拍完整 OC 菜单发给 Agent，先不要重做 U 盘。
+
+Agent 收到空格后仍缺项的反馈，再检查介质回读、`com.apple.recovery.boot` 的镜像与校验文件、实际驱动和扫描／隐藏规则。能看到菜单不等于恢复环境已加载。故障分别定位为固件没找到 OC、菜单缺项、镜像加载失败、内核阶段或图形界面阶段。
 
 ## 恢复环境
 
@@ -918,9 +939,10 @@ com.apple.recovery.boot/
 
 | OC 中看到的条目／当前情况 | 选择什么 |
 |---|---|
+| 只有 Windows，或找不到安装／恢复图标 | 先按一次空格展开隐藏条目，再按下面的规则选择 |
 | 有本次安装目标对应的 `macOS Installer`（名称可能含安装目标名） | 选它，继续硬盘上的安装 |
 | 没有该 Installer，但有刚才命名的 `macOS` | 选 `macOS`，继续安装或进入初始化／桌面 |
-| 只有 U 盘恢复项，或有多个相似条目分不清 | 拍完整 OC 菜单给 Agent，先不要重装 |
+| 按空格后仍只有 U 盘恢复项，或有多个相似条目分不清 | 拍完整 OC 菜单给 Agent，先不要重装 |
 
 **安装开始后的重启，不要再选带 `(external)`／`(dmg)` 的 U 盘恢复项，也不要选 Windows 或 Reset NVRAM。** 启动项位置会变化，按名称和所属目标辨认，不记“第 1 项”。若误回恢复首页，不要抹盘，按第 7 步重新选启动项。
 
@@ -929,7 +951,7 @@ com.apple.recovery.boot/
 - 目标分区看不到／重名／容量或所属硬盘不符：先要一张显示左侧设备树及右侧详情的完整照片。`Command＋2` 是显示设备层级，不保证把所有未识别分区显示为可选卷；不能让用户改选父磁盘来代替。GUI 证据仍不足时才请求只读 `diskutil list`／`diskutil info`，不要默认让所有新手进终端。
 - APFS 不在格式列表／抹掉失败：先核对目标和布局，不指导用户整盘重分区。旧版 macOS 需要其他格式时按已确认的版本改写第 5 步，不让用户自行选。
 - 下载缓慢：先看安装器日志和实际活动，不按剩余时间认定死机。Safari 可打开网页只证明基本网络，不能保证 Apple 安装下载可用。
-- OC 条目缺失或相似：按菜单照片核对名称、介质与目标，必要时指导显示辅助条目；不承诺固定重启次数或固定条目顺序。
+- OC 条目缺失或相似：先按空格显示辅助条目，再按菜单照片核对名称、介质与目标。不要因为初始只有 Windows 就直接判断写盘失败，也不要猜测固定图标位置、重启次数或条目顺序。[OpenCore HideAuxiliary 说明](https://github.com/acidanthera/OpenCorePkg/blob/master/Docs/Configuration.tex)
 
 操作语义依据：[Apple 磁盘工具快捷键](https://support.apple.com/guide/disk-utility/keyboard-shortcuts-dsku1b491744/mac)、[Apple 抹掉与重装说明](https://support.apple.com/zh-cn/102639)、[OpenCore 安装与重启](https://dortania.github.io/OpenCore-Install-Guide/installation/installation-process.html)。这里只采用相应 GUI／引导操作，不能照搬 Apple 的整机抹除范围到保留 Windows 的电脑。
 
@@ -1201,7 +1223,7 @@ python scripts/agentkit.py check-efi --root <准备中的EFI目录>
 
 从 [现成方案入口](#section-10-existing-solutions) 查询和登记。本篇继续用于来源选定后的有效配置审计与对照。若生成器的输出审计失败，先核对导入的硬件及原始表、原作者修复或其他生成器，再评估手工适配条件。
 
-按下表从上到下选择第一条有证据成立的路线，写入私有记录。安装阶段、BIOS 版本／设置、原始 ACPI、目标系统、外设与 USB 插孔都是比较条件。
+新任务 03 先按 [a／b／c 选择](#section-10-existing-solutions)登记用户路线，不能替用户默选或在导出失败后自行换路线。下表用于已有基线的对照、未指定路线的旧任务和后续排错。安装阶段、BIOS 版本／设置、原始 ACPI、目标系统、外设与 USB 插孔都是比较条件。
 
 | 条件 | 默认动作 | 必须保留的边界 |
 |---|---|---|
@@ -1300,6 +1322,18 @@ python scripts/efi_audit.py --efi <本次EFI目录> --baseline <适用成功EFI�
 
 ## 选哪条路
 
+**新建安装 EFI 时，先给用户三个选项，再开始制作。** 控制器在 03 返回 `next_action=choose-efi`，按原样展示；用户已在当前对话明确选择时直接登记，不能让用户再选一次。
+
+| 选项 | 向用户说明 | Agent 的下一步 |
+|---|---|---|
+| **a · RapidEFI-Tool（推荐）** | 先用开源工具生成，再按本机情况调整 | 执行 `choose-efi --choice a`，锁定 RapidEFI 版本，按下方固定流程导出原始 EFI |
+| **b · 寻找相似配置** | AI 查找相近机型的成功配置，核对差异后修改 | 执行 `choose-efi --choice b`，登记可复核的案例为 `recipe`，独立处理本机身份、ACPI 与 USB 映射 |
+| **c · AI 生成** | AI 按官方模板和真实硬件资料逐项生成，需要更多核对 | 执行 `choose-efi --choice c`，从锁定 OpenCorePkg 的 `Docs/Sample.plist` 建立；来源登记为官方 `recipe` |
+
+这三个选项都要保存原始配置并通过 ACPI、ocvalidate、EFI 审计和介质回读检查。已有同机成功 EFI 一并留作排错对照；未经用户选择，不用它悄悄替换本轮路线。选定路线确实不可用时，说明原因和可选替代路线，再让用户改选。
+
+下面的默认来源优先级用于未指定路线的硬件修复与旧任务。新建 EFI 按 a／b／c 的明确选择执行，不要求选择 b／c 的用户先假称两套生成器都已核查失败。
+
 1. 先查同一台机器、同阶段的成功产物，找出对应的启动或功能实测。比对主板、BIOS、硬件 ID、显示接线、系统 build、架构和用途。若相符，保存原始副本作为基线；若改变，写明差异。
 2. 缺少适用基线时查维护者的工具、驱动项目或已落地的上游修复。固定 tag、提交或可识别的发行版本，保存一份有关键支持条件的来源摘录或日志。按准确板型／设备 ID、macOS build、架构与症状查发布说明、设备匹配表、issue、关联 PR 和 CI 产物。核对某项修复是否已进入**准备使用的那个二进制**。工具网页和包下载失败时按 [下载与中转](#section-04-installer) 处理。
 3. 适合的工具均无法解决时，才依据对应版本的官方模板、维护者的具体解决步骤，在独立副本中做一项可验证的修改。社区 EFI 与论坛案例仅用于寻找有出处的差异；对其他机器的序列号、USB 映射、DSDT 和身份数据分别处理。找不到有依据的做法时交接此问题，继续可做的设备检查。
@@ -1310,7 +1344,29 @@ python scripts/efi_audit.py --efi <本次EFI目录> --baseline <适用成功EFI�
 | ACPI、USB | [SSDTTime](https://github.com/corpnewt/SSDTTime)、[USBToolBox](https://github.com/USBToolBox/tool) | 从 A 原始表生成的 AML 和配套重命名、实际插孔的发现记录及映射。分别核对作用域、匹配和启用状态。 |
 | GPU、有线、无线或音频 | 用下方 lookup 按问题找原项目，再按设备 ID 深查。工具目录可补充其他已维护分支及作者给出的具体修复。 | 锁定的驱动、依赖、证据、回退包；最终包与实际加载位置都要核对。 |
 
-**使用 RapidEFI 的双机例子。** 在 A 的 Windows 中导出该版本可识别的硬件报告和原始 ACPI，传回 B，在 B 的 RapidEFI 导入后选择目标系统并导出。如果只能在 A 交互操作，一次给用户四个动作：打开“配置 EFI → 自动配置 EFI”，刷新 A 的硬件信息，选择目标 macOS，点“输出 EFI”。以实际产生的文件为准。没有桌面权限时先查另一种受支持的生成方式。两套生成器输出到不同目录，分别校验，避免混合后失去可追溯的起点。
+### RapidEFI 的固定操作与自动化
+
+在 **A 的可见 Windows 桌面**运行时，固定顺序是 **打开 RapidEFI → 配置 EFI／自动配置 EFI → 刷新硬件信息并等待完成 → 在 EFI 设置中确认目标 macOS 版本 → 输出 EFI并等待成功**。先读回主板、处理器和目标版本再导出。页面加载、扫描完成和生成成功分别检查，不按固定延时盲点。
+
+有桌面操作工具时，让 Agent 完成这组点击。可使用按钮／控件定位，或截图识别后点击并读回页面。A 有已授权的 RDP／远程桌面会话时，可以从 B 的桌面工具操作该会话；记录实际使用的交互会话。单独 SSH 启动的进程可能不在用户可见桌面，不能把进程存在算成可控窗口，也不要在隐藏会话连续试坐标。
+
+也可以在 **B** 运行 RapidEFI：先从 A 取得该工具支持的硬件报告与原始 ACPI，然后在 B 的自动配置页**导入 A 的硬件资料**，确认界面显示的是 A，再选目标版本并输出。此模式禁止点“刷新硬件信息”把资料替换成 B 的硬件。B 生成的 EFI 在 B 的桌面取回；A 生成的 EFI在 A 的桌面取回，再由 SFTP 传回 B。
+
+截至本版核对，官方 [启动入口](https://github.com/JeoJay127/RapidEFI-Tool/blob/main/lib/main.dart) 没有暴露受支持的批量生成参数。优先自动操作现有 GUI，不虚构 `--auto`／`--output` 等命令行接口。其他 Agent 没有桌面操作能力时，一次给用户上述固定动作，请其完成导出；不因此擅自改选 b 或 c。进入桌面、授权远程会话等必要人类动作单独说明，后续点击合并完成。
+
+### 从实际桌面取回产物
+
+RapidEFI Windows 默认输出到**运行它的用户桌面**，不是固定的 C 盘根目录、程序目录或 `C:\EFI`。当前 [输出路径实现](https://github.com/JeoJay127/RapidEFI-Tool/blob/main/lib/utils/file_util.dart) 使用 `%USERPROFILE%\Desktop`；还要核对实际生成成功提示、用户选择的输出目录及 Windows 重定向桌面。不能把 B 的桌面当 A 的桌面，也不能把 SSH 账户桌面当成另一个实际运行账户的桌面。
+
+Agent 在运行 RapidEFI 的 Windows 主机和账户上记录生成开始时间，导出后先按成功提示路径读取。需要发现候选目录时运行包内只读助手；`-StartedAfter` 填这次实际开始时间，`-DesktopPath` 可填已确认的实际输出桌面。示例中的时间由 Agent 替换。
+
+```powershell
+& .\scripts\find-rapidefi-output.ps1 -StartedAfter '<本次开始时间，带时区>'
+# 若由其他用户运行或选择了其他桌面／输出目录，显式传入实际路径。
+& .\scripts\find-rapidefi-output.ps1 -DesktopPath '<实际运行用户的桌面或输出目录>' -StartedAfter '<本次开始时间，带时区>'
+```
+
+助手返回候选 EFI、config 哈希、时间及同级 configModel；多个候选或无本次新增证据时，再和成功提示核对，不能直接取最近的旧目录。完整保留 `EFI/OC/config.plist`、`EFI/BOOT/BOOTx64.efi`、ACPI、Kexts、Drivers，以及实际存在的 configModel。归档生成器的原始输出后，再复制到本轮测试目录调整。同版本 ocvalidate 与真实 A 的适配审核通过，才进入写盘。
 
 **在网站找同型成功案例。** 搜“主板完整型号＋修订号＋BIOS＋macOS build＋症状／设备 ID”。优先有启动或功能实测、原始配置和修复提交的案例。取回它相对上游究竟改了哪几个字段或组件，并核对本机命名空间和硬件路径。符合条件时把这份可复现步骤登记为 recipe，再从自己的生成器输出上应用最小差异。若用户明确在测试“从零生成”的能力，旧成功 EFI 可作为独立对照，把本轮为何不直接复用写入记录。
 
@@ -1327,7 +1383,7 @@ python scripts/workflow.py --run "<run>" --json select-source --file "<run>/evid
 
 模板的 `target` 用稳定设备 ID，EFI 用固定的板型与用途。`environment` 写明目标 macOS／架构及相关固件条件。`hardware_evidence` 指向本轮原始硬件／故障采集。每个候选有三个状态，`unchecked` 表示待确认，`excluded` 表示已经核查并记录排除依据，`usable` 表示匹配。Agent 对已核查项填 `fit` 和 `evidence`；命中项另填不可随分支移动的 `revision`，如 release tag、完整提交、带哈希的文档或基线快照标识。来源文件与硬件文件使用 run 内的相对路径。新增项目按相同格式提供原作者 HTTPS 来源，内置目录可以扩展。
 
-选择顺序为 `baseline → project → recipe`。EFI 走模板之前要记录两种已列生成器的核查结果和排除理由。工具只检查记录顺序和证据文件的字节；来源真实性、支持范围和实验是否成功，由 Agent 结合现场验证。没有可用方案时，check 返回 `research-or-handoff`，保存已查候选并转入下方交接。单纯改写报告或擅自更改版本号不能充当新证据。
+未指定 EFI 路线的旧任务和硬件修复仍按 `baseline → project → recipe`；EFI 的旧式模板回退需要记录两种已列生成器的核查结果。新任务先 `choose-efi --choice a|b|c`，预查来源时 `solutions.py check` 同时传 `--efi-route a|b|c`，控制器会按已登记的选择核对来源。选 b 使用实际案例 recipe，选 c 使用 OpenCorePkg 官方模板 recipe，不能登记成 RapidEFI 生成。工具检查顺序和文件字节，来源适配及实际结果仍须核验。没有适用来源时保留记录并交接，不用改版本号或改写报告充当新证据。
 
 ## 原始产物和阶段报告
 
@@ -1460,3 +1516,5 @@ WorkBuddy 在显卡检查后列出了待办，用户指定网卡后才继续排�
 - [键盘唤醒分类](https://dortania.github.io/OpenCore-Post-Install/usb/misc/keyboard.html)
 
 Realtek／其他网卡的实验分支会变化，因此本包不把某个 fork 写为所有芯片的固定来源。Agent 用采集的 vendor/device/subsystem ID 查原作者 README、源码匹配表、目标 macOS 与发布记录，确认后记录准确仓库和提交。搜索不到可复核证据就报告未知，而不是编造驱动名称或地址。
+
+2026-11-05 核对的 RapidEFI GUI 顺序和 Windows 默认桌面路径，依据 [RapidEFI 快速开始](https://github.com/JeoJay127/RapidEFI-Tool#快速开始)、[文件输出实现](https://github.com/JeoJay127/RapidEFI-Tool/blob/main/lib/utils/file_util.dart) 与 [应用启动入口](https://github.com/JeoJay127/RapidEFI-Tool/blob/main/lib/main.dart)。OpenCore 的恢复项辅助分类和空格展开依据 [官方 Configuration.tex 中 HideAuxiliary](https://github.com/acidanthera/OpenCorePkg/blob/master/Docs/Configuration.tex)。执行时仍固定所用版本并核对实际界面。

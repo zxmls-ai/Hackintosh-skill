@@ -98,10 +98,71 @@ class SolutionTests(unittest.TestCase):
         import os
         from unittest.mock import patch
         with patch.dict(os.environ,{'PYTHONIOENCODING':'utf-8'}):
-            self.assertEqual(cli('status')['next_action'],'lookup-then-select-source')
+            self.assertEqual(cli('status')['next_action'],'choose-efi')
+            selected = cli('choose-efi','--choice','a')
+            self.assertEqual(selected['next_action'],'lookup-then-select-source')
             saved=cli('select-source','--file',str(self.run/self.path))
             self.assertEqual(saved['selected_source']['kind'],'project')
             self.assertEqual(cli('status')['next_action'],'guided-contract')
+
+    def test_fresh_media_requires_explicit_choice_before_registering_source(self):
+        self.state.update(phase='03-media')
+        with self.assertRaises(Fault) as error:
+            flow.select_source(self.run,self.state,self.run/self.path)
+        self.assertEqual(error.exception.code,'EFI_ROUTE_REQUIRED')
+        output=flow.render_result(self.state)
+        self.assertEqual([o['value'] for o in output['options']],['a','b','c'])
+        self.assertIn('推荐',output['options'][0]['label'])
+
+    def test_manual_and_similar_choices_use_the_selected_evidence(self):
+        p=solutions.lookup('efi','board')['template']
+        p.update(environment='target build',hardware_evidence=self.hw)
+        for source,route in [('https://github.com/example/board-efi','b'),('https://github.com/acidanthera/OpenCorePkg/blob/v-fixture/Docs/Sample.plist','c')]:
+            with self.subTest(route=route):
+                plan=copy.deepcopy(p)
+                plan['candidates'].append({'kind':'recipe','source':source,'revision':'commit-fixture',
+                    'fit':'explicit user route and matching hardware','evidence':self.ev,'status':'usable',
+                    'base_config':'staging/original.plist'})
+                self.write(self.path,plan)
+                chosen=solutions.assess(self.run,self.path,topic='efi',efi_route=route)
+                self.assertEqual(chosen['source'],source)
+                with self.assertRaises(Fault):
+                    solutions.assess(self.run,self.path,topic='efi',efi_route='a')
+
+    def test_efi_choice_is_persistent_and_its_evidence_cannot_change(self):
+        self.state.update(phase='03-media')
+        flow.choose_efi(self.run,self.state,'a')
+        self.assertEqual(flow.efi_choice(self.run,flow.load(self.run)),'a')
+        revision=self.state['revision']
+        flow.choose_efi(self.run,self.state,'a')
+        self.assertEqual(self.state['revision'],revision)
+        self.write(self.state['efi_choice']['proof']['path'],{'choice':'b'})
+        with self.assertRaises(Fault) as error:
+            flow.select_source(self.run,self.state,self.run/self.path)
+        self.assertEqual(error.exception.code,'EVIDENCE_CHANGED')
+
+    def test_existing_registered_media_source_resumes_without_a_new_choice(self):
+        self.state.update(phase='03-media',source_decisions={'03-media':{'old-plan.json':{'topic':'efi'}}})
+        self.assertEqual(flow.render_result(self.state)['next_action'],'guided-contract')
+        self.assertNotIn('options',flow.render_result(self.state))
+
+    def test_user_route_change_archives_prior_choice_and_keeps_retry_budget(self):
+        self.state.update(phase='03-media')
+        flow.choose_efi(self.run,self.state,'a')
+        plan=copy.deepcopy(self.plan)
+        plan['topic']='efi'
+        plan['candidates'][1].update(source=solutions.CARDS['efi'][0]['source'],base_config='staging/original.plist')
+        self.write(self.path,plan)
+        selected=flow.select_source(self.run,self.state,self.run/self.path)
+        self.state['source_trials']={selected['trial_key']:2}
+        flow.choose_efi(self.run,self.state,'b')
+        self.assertEqual(flow.render_result(self.state)['next_action'],'lookup-then-select-source')
+        self.assertEqual(self.state['source_trials'][selected['trial_key']],2)
+        saved=self.state['superseded_efi_sources'][-1]
+        flow.verify_evidence(self.run,saved)
+        self.assertIn(self.path,flow.read_json(self.run/saved['path']))
+        with self.assertRaises(Fault):
+            flow.select_source(self.run,self.state,self.run/self.path)
 
     def test_third_same_source_attempt_rejected_even_if_file_and_wording_change(self):
         flow.select_source(self.run,self.state,self.run/self.path)

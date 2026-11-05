@@ -1,5 +1,7 @@
 # 00 准备工作和远程接入 · 流程控制器参考
 
+v0.2.9 新任务进入阶段 03 时会返回 `next_action=choose-efi` 和 a／b／c。展示给用户后，依据真实回复执行 `python scripts/workflow.py --run "任务目录" --json choose-efi --choice a`（或 b、c），再按新的 `next_action` 查来源并登记。首次 `select-source` 缺少选择时返回 `EFI_ROUTE_REQUIRED`。既有任务已登记 EFI 来源时保留原路线继续，避免升级中途重复提问或重做产物。各路线的来源字段见 [现成方案入口](10-existing-solutions.md)。
+
 ## 定位与实际覆盖
 
 固定入口、输入、显示、阶段顺序和验收流程；AI 处理现场信息与未覆盖的故障。不要自行重写已有动作，也不要靠聊天里的“已完成”推进任务。

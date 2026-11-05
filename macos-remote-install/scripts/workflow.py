@@ -18,7 +18,7 @@ from ssh_transport import Fault, parse_packet, verify_connection, credential_fro
 from acpi_guard import check_acpi_evidence
 from solutions import assess as assess_solution
 
-VERSION = '0.2.8'
+VERSION = '0.2.9'
 ROOT = Path(__file__).resolve().parent
 CONTRACT_PATH = ROOT.parent / 'workflow.json'
 UPGRADE_PATH = ROOT.parent / 'upgrades.json'
@@ -28,6 +28,8 @@ TRACKED = ['workflow.py','ssh_transport.py','probe-windows.ps1','enable-windows-
 
 # code -> summary, diagnostic action, human input, fixed resume action
 ERRORS = {
+    'EFI_PICKER_INVALID': ('安装 EFI 还在隐藏恢复等辅助条目。','我会在测试副本将 HideAuxiliary 设为 false，重新校验并回读 U 盘。','暂时无需操作。','review'),
+    'EFI_ROUTE_REQUIRED': ('备份与安装空间已确认，先选择 EFI 制作方式。','选定后我会按这条路线制作并检查启动文件。','回复 a、b 或 c。','choose-efi'),
     'SOLUTION_REQUIRED': ('还需确认现有方案适合这台电脑。','我会先核对同机成功记录，再比较工具作者提供的方案。','暂时无需操作。','select-source'),
     'SOLUTION_RETRY_LIMIT': ('同一方案在相同条件下已试过两轮。','我会保留可退回的配置，核对新的线索或整理交接，再继续可做的检查。','暂时无需操作。','select-source'),
     'PACKET_INVALID': ('收到的连接结果不完整。','我会用原始结果核对 A。','从 A 的 PowerShell 重新复制完整的 SSH_HANDOFF_V1 那一行到这里。','import'),
@@ -393,6 +395,40 @@ def recover(run, state):
 
 SOURCE_PHASES = ('03-media', '04-install', '06-devices')
 
+EFI_CHOICES = {
+    'a': 'RapidEFI-Tool 生成后适配（推荐）',
+    'b': '查找相似配置，核对差异后适配',
+    'c': 'AI 按官方 Sample 与本机资料生成',
+}
+
+
+def has_efi_source(state):
+    return any(choice['topic'] == 'efi' for choice in state.get('source_decisions', {}).get('03-media', {}).values())
+
+
+def efi_choice(run, state):
+    selection = state.get('efi_choice')
+    if not selection or state['phase'] != '03-media':
+        return None
+    verify_evidence(run, selection['proof'])
+    return selection['choice']
+
+
+def choose_efi(run, state, choice):
+    if state['phase'] != '03-media' or state['step'] != 'guided-contract' or choice not in EFI_CHOICES:
+        raise Fault('ACTION_NOT_ALLOWED')
+    if efi_choice(run, state) == choice:
+        return
+    if has_efi_source(state):
+        previous = state['source_decisions']['03-media']
+        archive = evidence(run, 'before-user-efi-route-change', previous)
+        state.setdefault('superseded_efi_sources', []).append(archive)
+        state['source_decisions']['03-media'] = {}
+    proof = evidence(run, 'user-efi-choice', {'choice': choice, 'label': EFI_CHOICES[choice]})
+    state['efi_choice'] = {'choice': choice, 'proof': proof}
+    state.update(status='planned', failure=None)
+    save(run, state, 'user-efi-choice')
+
 
 def check_trial_budget(state, choice):
     key = choice['trial_key']
@@ -410,11 +446,14 @@ def check_trial_budget(state, choice):
 def select_source(run, state, plan_path):
     if state['phase'] not in SOURCE_PHASES or state['step'] == 'complete':
         raise Fault('ACTION_NOT_ALLOWED')
+    route = efi_choice(run, state)
+    if state['phase'] == '03-media' and route is None and not has_efi_source(state):
+        raise Fault('EFI_ROUTE_REQUIRED')
     try:
         relative = Path(plan_path).absolute().relative_to(run.absolute()).as_posix()
     except ValueError:
         raise Fault('SOLUTION_REQUIRED') from None
-    choice = assess_solution(run, relative)
+    choice = assess_solution(run, relative, efi_route=route)
     check_trial_budget(state, choice)
     saved = state.get('source_decisions', {}).get(state['phase'], {}).get(relative)
     if saved:
@@ -434,7 +473,7 @@ def selected_solution(run, state, relative, **options):
         raise Fault('SOLUTION_REQUIRED')
     for item in stored['proofs']:
         verify_evidence(run, item)
-    return assess_solution(run, relative, **options)
+    return assess_solution(run, relative, efi_route=efi_choice(run, state), **options)
 
 
 def diagnosis(run, state, plan_path):
@@ -597,8 +636,8 @@ PHASE_CARDS = {
                  '我会在 A 的 Windows 中准备工具并读取主板资料，制作并检查启动文件。',
                  '先备好可以清空的 U 盘。需要插入时我会提醒，清空前会请你核对是哪一只。如希望 A 免装 Python，可改用多一次重启的方案。'),
     '04-install': ('启动 U 盘已核对，接下来要在 A 的屏幕上操作。',
-                   '用 U 盘启动后，你会看到 macOS 恢复界面。我会给你从选分区到第一次进桌面的操作清单。',
-                   '带着 U 盘到 A 旁，按本机清单操作。磁盘名称或容量对不上时，停在抹掉之前，拍照发来。'),
+                   '先进入 OpenCore 启动菜单，再选 U 盘的 macOS 安装／恢复项。我会给你到桌面的操作清单。',
+                   '带着 U 盘到 A 旁。文字菜单用上下键，图形菜单用左右键，回车启动；只有 Windows 时先按空格显示隐藏项。分区对不上时停在抹掉前，拍照发来。'),
     '05-macos-remote': ('A 已经进入 macOS 桌面。',
                         '打开 macOS 的远程登录后，我就能从 B 继续检查新系统。', '在 A 打开“系统设置 → 通用 → 共享”，按接下来的指引开启远程登录。'),
     '06-devices': ('已接入 A 的 macOS，开始逐项检查硬件。',
@@ -640,10 +679,14 @@ def render_result(state, override=None):
             result.update(next_action='collect-acpi-then-review',contract=contract)
         elif code=='EFI_DIAGNOSTICS_INVALID':
             result.update(next_action='correct-efi-then-review',contract=contract)
+        elif code=='EFI_PICKER_INVALID':
+            result.update(next_action='correct-efi-then-review',contract=contract)
         elif code=='SOURCE_CHANGED':
             result.update(next_action='upgrade')
         elif code in ('SOLUTION_REQUIRED', 'SOLUTION_RETRY_LIMIT'):
             result.update(next_action='lookup-then-select-source' if code == 'SOLUTION_REQUIRED' else 'new-evidence-or-handoff',contract=contract)
+        elif code == 'EFI_ROUTE_REQUIRED':
+            result.update(next_action='choose-efi')
     elif state['step'] in ('init', 'prepare'):
         summary, action, human = '已在这台电脑上准备好安装记录。', '我会准备给待安装电脑使用的连接代码。', '暂时无需操作。'
         result['next_action'] = 'prepare-or-import'
@@ -677,8 +720,19 @@ def render_result(state, override=None):
         if phase=='03-media':
             choices = state.get('source_decisions', {}).get(phase, {}).values()
             if not any(choice['topic'] == 'efi' for choice in choices):
-                result['next_action']='lookup-then-select-source'
-                action = '我会先找这台电脑以前成功的启动配置。没有可用备份，再找适合这台机器的现成工具。'
+                selection = state.get('efi_choice')
+                if selection:
+                    result['next_action']='lookup-then-select-source'
+                    action = '已选择“' + EFI_CHOICES[selection['choice']] + '”，我会核对来源并保留原始配置。'
+                    human = '暂时无需操作。轮到插 U 盘或需要你在 A 旁配合时，我会说明。'
+                else:
+                    result['next_action']='choose-efi'
+                    summary = '备份与安装空间已确认，接下来制作适合 A 的启动文件（EFI）。'
+                    action = '先选制作方式，我会核对本机资料，再制作启动 U 盘。'
+                    human = '回复 a、b 或 c。已有同机成功 EFI 会保留为对照。'
+    if result.get('next_action') == 'choose-efi':
+        result['options'] = [{'value': key, 'label': label} for key, label in EFI_CHOICES.items()]
+        human += '\n\n' + '\n'.join(key + ' · ' + label for key, label in EFI_CHOICES.items())
     if state.get('status') == 'running':
         result['next_action'] = 'resume'
         summary, action, human = '上次连接检查还没有最终结果。', '我会确认上一次检查已结束，再继续验证。', '暂时无需操作。'
@@ -700,6 +754,7 @@ def main():
     for action in ('init','status','intro-shown','resume','recheck','recover','upgrade'):
         sub.add_parser(action)
     p = sub.add_parser('prepare'); p.add_argument('--b-ip',action='append')
+    p = sub.add_parser('choose-efi'); p.add_argument('--choice',required=True,choices=EFI_CHOICES)
     p = sub.add_parser('import'); p.add_argument('--file',required=True,type=Path)
     p = sub.add_parser('verify'); group=p.add_mutually_exclusive_group(); group.add_argument('--credential-file',type=Path); group.add_argument('--key-file',type=Path)
     for action in ('diagnose','repair-result','review','problem','select-source'):
@@ -723,6 +778,7 @@ def main():
                     if args.command=='upgrade': upgrade(run,state)
                     elif args.command=='intro-shown': intro_shown(run,state)
                     elif args.command=='prepare': prepare(run,state,args.b_ip)
+                    elif args.command=='choose-efi': choose_efi(run,state,args.choice)
                     elif args.command=='import': import_handoff(run,state,args.file)
                     elif args.command=='verify': verify(run,state,args.credential_file,args.key_file)
                     elif args.command=='resume': resume(run,state)
@@ -734,7 +790,7 @@ def main():
                     elif args.command=='problem': problem(run,state,args.file)
                     elif args.command=='select-source': registered=select_source(run,state,args.file)
                 except Fault as exc:
-                    if exc.code in ('ACTION_NOT_ALLOWED','SOLUTION_REQUIRED','SOLUTION_RETRY_LIMIT'):
+                    if exc.code in ('ACTION_NOT_ALLOWED','SOLUTION_REQUIRED','SOLUTION_RETRY_LIMIT','EFI_ROUTE_REQUIRED'):
                         fault={'code':exc.code,'details':exc.details}
                     else:
                         record_fault(run,state,exc)

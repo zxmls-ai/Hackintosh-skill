@@ -333,17 +333,17 @@
     },
     "0.2.8": {
       "sources": {
-        "workflow.py": "b96495fc7633b2b05c00f1c5998fc7187c8e72936cad3bea5f56cde27a1a4f5b",
+        "workflow.py": "d398b982b2f8dbe7af1025831d512099a5cfe14dbc02bc6e45c76355138266ef",
         "ssh_transport.py": "71a441e14dc6a4e130322e764e4bf37f9c21b23f1d9b4f2126c3e4debe5a2433",
         "probe-windows.ps1": "47a772c41058a91c3c412c8f1cab2bc335b5b14c0d2d909720a93a8b79cde360",
-        "enable-windows-ssh.ps1": "7fcc8ecc315ba03ab103788241c73417dfeaca6ceea1d1296ca3e1a5f9fd55e8",
+        "enable-windows-ssh.ps1": "ed88547a0f1e2366e6545feb0b90383eb6518ee659b92d5e01b8ff9e3d02bb1d",
         "prepare_ssh_handoff.py": "c0501af412042320a883a22b45638221f3e7a527b351d93ef0e5369bc8d7071f",
         "agentkit.py": "16186ae8ed3ed2efb0a967b850426588692dd28c218d4e2d28ed528812a02cdc",
         "acpi_guard.py": "35b6c9522418260d3af4ff253e6a36882eb3b5c583f4469088e5988058de4ba5",
         "efi_audit.py": "57466518f4083063bc303b176cb5db165d6d0f440af094aefc6318db7f72e96e",
         "metal_smoke_test.js": "ab1a8c2a52fba55fe3bf46898b138d0150a763f131d2178e22f393dc19fdbef3",
-        "workflow.json": "ce800640a4865a5d3dbd4a1f748346c7ac70d7f81e09f855b77a41bdbda55e90",
-        "upgrades.json": "ec8947d508eee9121ffcd62ef6c5c804502164a91a68ac5835f7d8ca7cc861f7",
+        "workflow.json": "8f3fcc6966f08bf22cbb7991baf550cf8540341c2d7ef0cdbbdcfbeff93cfead",
+        "upgrades.json": "a827a9b4102919718d27826591f0039e8c4a86a0f006e23a241d11b89a9d3bea",
         "solutions.py": "25e2377dbafc76bbe82100c63d8d6dcc421cc92f8a4d9c13da9a12815bcaa4c0"
       },
       "allowed_phases": [
@@ -368,7 +368,20 @@
         "08-delivery"
       ],
       "rewind_phases": [],
-      "source_variants": {}
+      "source_variants": {
+        "workflow.py": [
+          "b96495fc7633b2b05c00f1c5998fc7187c8e72936cad3bea5f56cde27a1a4f5b"
+        ],
+        "enable-windows-ssh.ps1": [
+          "7fcc8ecc315ba03ab103788241c73417dfeaca6ceea1d1296ca3e1a5f9fd55e8"
+        ],
+        "workflow.json": [
+          "ce800640a4865a5d3dbd4a1f748346c7ac70d7f81e09f855b77a41bdbda55e90"
+        ],
+        "upgrades.json": [
+          "ec8947d508eee9121ffcd62ef6c5c804502164a91a68ac5835f7d8ca7cc861f7"
+        ]
+      }
     }
   }
 }

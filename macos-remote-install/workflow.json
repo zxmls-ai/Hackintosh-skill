@@ -1,6 +1,6 @@
 {
   "schema": "install-workflow-v1",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "phases": [
     {
       "id": "00-remote",
@@ -106,7 +106,7 @@
         "清空具体 U 盘已授权"
       ],
       "actions": [
-        "查询现成 EFI 路线并通过 select-source 登记，优先同机成功 EFI，再选择合适的生成器",
+        "先展示 a RapidEFI（推荐）／b 相似配置／c 官方模板路线，由用户选择并用 choose-efi 登记，再 select-source",
         "复用有效本机 ACPI；缺少时自动准备 Python 并在 A 的 Windows 中导出",
         "下载校验",
         "组装本机 EFI",
@@ -147,9 +147,8 @@
       "efi_protocol": {
         "reference": "references/09-efi-diagnostics.md",
         "source_order": [
-          "applicable-same-machine-tested-baseline",
-          "supported-upstream-generator",
-          "documented-platform-sample"
+          "user-selected-rapidefi-or-similar-or-official-sample",
+          "preserve-applicable-same-machine-baseline-for-comparison"
         ],
         "audit": "scripts/efi_audit.py",
         "runtime_verified_by_audit": false,
@@ -159,7 +158,19 @@
         ],
         "source_gate": "select-source",
         "lookup": "scripts/solutions.py lookup efi",
-        "reference_source_choice": "references/10-existing-solutions.md"
+        "reference_source_choice": "references/10-existing-solutions.md",
+        "choice_action": "choose-efi",
+        "choices": {
+          "a": "RapidEFI-Tool generation then adaptation (recommended)",
+          "b": "documented similar-machine EFI adaptation",
+          "c": "AI adaptation from pinned official OpenCore Sample"
+        },
+        "picker_handoff": "Explain actual text or graphical picker and Spacebar auxiliary entries",
+        "install_picker": {
+          "HideAuxiliary": false,
+          "gate": "EFI_PICKER_INVALID",
+          "fallback_hint": "If only Windows is visible, press Spacebar."
+        }
       }
     },
     {

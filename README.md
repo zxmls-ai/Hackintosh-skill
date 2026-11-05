@@ -1,4 +1,4 @@
-# Hackintosh-skill · v0.2.8
+# Hackintosh-skill · v0.2.9
 
 你可以在一台电脑上和 AI 助手聊天，让它帮你在另一台 Windows 电脑上检查硬件、准备安装 U 盘，再安装 macOS。默认保留 Windows。
 
@@ -41,13 +41,13 @@
 
 第一轮会先介绍两台电脑的分工，再给一段完整命令。你在 A 粘贴运行一次，把结果发回 B。助手核对连接后，就可以自动检查硬件。已有受控任务会按保存的进度继续。
 
-想先看看助手会怎么说，可以打开[新手对话预览](新手对话预览.md)。习惯用 WorkBuddy 技能导入的用户，可以直接[下载 v0.2.8 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.8.zip)。遇到仓库访问问题时，见[新手起步](START-HERE.md)。
+想先看看助手会怎么说，可以打开[新手对话预览](新手对话预览.md)。习惯用 WorkBuddy 技能导入的用户，可以直接[下载 v0.2.9 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.9.zip)。遇到仓库访问问题时，见[新手起步](START-HERE.md)。
 
 ## 给 Agent 的入口说明
 
 在 B 取得仓库快照并记录分支和完整提交号。已有目录先检查来源与本地变更。没有 git 就取得对应提交的源码归档。用户提供完整离线包时，记录包版本和 SHA256。安装期间固定同一份源码。运行前审阅脚本。只有网页读取权限时进入人工指导模式并说明当前能力。
 
-执行路线面向支持 UEFI 启动的 x86-64 PC。组装 EFI 和修复设备前先查询现成方案，登记选择并限制重复试验。阶段 00 由控制器在 B 验证连接，01～08 按阶段要求和现场证据审核。[流程控制器](macos-remote-install/references/00-controller.md)
+执行路线面向支持 UEFI 启动的 x86-64 PC。阶段 03 会先让你选择 **a · RapidEFI-Tool 生成后适配（推荐）／b · 寻找相似配置后适配／c · AI 按官方模板生成**，再制作 EFI。有桌面控制能力时由助手自动操作 RapidEFI，按实际桌面或成功提示路径取回产物。安装 EFI 默认展开恢复等辅助项；若开机只有 Windows，可按空格展开隐藏项。阶段 00 由控制器在 B 验证连接，01～08 按阶段要求和现场证据审核。[流程控制器](macos-remote-install/references/00-controller.md)
 
 ## 包含什么
 
@@ -56,7 +56,7 @@
 | [macos-remote-install/SKILL.md](macos-remote-install/SKILL.md) | 跨 Agent 的精简技能入口，按阶段加载资料 |
 | [AI-GUIDE.md](AI-GUIDE.md) | 从相同内容合成的单文件指南，适合直接附给 Agent |
 | [START-HERE.md](START-HERE.md) | 第一次启动、离线读取及 WorkBuddy 使用方式 |
-| [WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.8.zip) | 下载 ZIP，供支持本地技能导入的 WorkBuddy 客户端使用 |
+| [WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.9.zip) | 下载 ZIP，供支持本地技能导入的 WorkBuddy 客户端使用 |
 | [references](macos-remote-install/references/) | SSH、兼容性、备份分区、EFI、安装、驱动、排错、续接 |
 | [流程规范与调用方式](macos-remote-install/references/00-controller.md) | 固定输入输出、错误恢复、断点续接与合同审核 |
 | [恢复界面安装步骤](macos-remote-install/references/05-boot-handoff.md) | Agent 填好目标后交付：抹掉、安装、重启选择、初始化 |
