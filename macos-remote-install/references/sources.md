@@ -42,4 +42,6 @@
 
 Realtek／其他网卡的实验分支会变化，因此本包不把某个 fork 写为所有芯片的固定来源。Agent 用采集的 vendor/device/subsystem ID 查原作者 README、源码匹配表、目标 macOS 与发布记录，确认后记录准确仓库和提交。搜索不到可复核证据就报告未知，而不是编造驱动名称或地址。
 
+2026-11-05 对照 [OpenCore 官方配置规范](https://github.com/acidanthera/OpenCorePkg/blob/master/Docs/Configuration.tex) 的 LauncherOption、LauncherPath、RequestBootVarRouting 与 ShowPicker：固件登记发生于加载器执行，Boot 变量可能被重定向。首次硬盘启动不能仅以配置键或复制成功验收；配合 [LauncherOption 指引](https://dortania.github.io/OpenCore-Post-Install/multiboot/bootstrap.html) 核对本次使用版本与实际固件。
+
 2026-11-05 核对的 RapidEFI GUI 顺序和 Windows 默认桌面路径，依据 [RapidEFI 快速开始](https://github.com/JeoJay127/RapidEFI-Tool#快速开始)、[文件输出实现](https://github.com/JeoJay127/RapidEFI-Tool/blob/main/lib/utils/file_util.dart) 与 [应用启动入口](https://github.com/JeoJay127/RapidEFI-Tool/blob/main/lib/main.dart)。OpenCore 的恢复项辅助分类和空格展开依据 [官方 Configuration.tex 中 HideAuxiliary](https://github.com/acidanthera/OpenCorePkg/blob/master/Docs/Configuration.tex)。执行时仍固定所用版本并核对实际界面。

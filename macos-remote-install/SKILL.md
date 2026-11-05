@@ -2,7 +2,7 @@
 name: macos-remote-install
 description: 从另一台 B 电脑远程协助 A 电脑安装或修复 OpenCore 与 macOS 双系统。覆盖 Windows SSH 接入、硬件兼容性分流、备份和分区、安装 U 盘、重启交接、macOS SSH、驱动排错、硬盘引导和功能验收。适合需要逐步进度反馈及回退记录的安装任务；不承诺所有硬件兼容，也不提供可直接套用的通用 EFI。
 metadata:
-  version: "0.2.9"
+  version: "0.2.10"
   language: zh-CN
   updated: "2026-11-05"
 ---
@@ -252,6 +252,12 @@ B 能运行 Python 时，先读 [标准流程控制器](references/00-controller
 - 文件配置、命令成功、驱动加载和实际功能可用，是不同证据层级。报告必须区分。
 - 硬件可行性结论要先查当前原作者资料。尚未采集 GPU 精确型号／ID、目标 macOS 并查证前，不以“新 RTX 加速基本无解”等旧概括劝退。实验性支持需要说明条件和未测项，不能等同于没有加速；按 [硬件分流](references/02-hardware-routing.md) 与对应案例继续核验。
 
+## 首次进入 macOS 后的顺序
+
+远程登录成功即进入 06：自动全机扫描，对照 Windows 清单，先展示异常／待测表并 `record-devices`；每张网卡、显卡优先，逐项查同机基线与社区开源方案并修复测试。单项无解先跳过继续其余项，所有未测和限制集中交代；清单关闭前不能写硬盘 ESP。此处必须读 [安装后固定合同](references/11-postinstall-contract.md)。
+
+07 必须一起完成已验收 EFI 部署、固件硬盘 OC 启动项和优先顺序、菜单显示与回读；`boot-ready` 通过再交付拔 U 盘冷启动。只复制 EFI 或只设置 LauncherOption 都不算完成。
+
 ## 阶段与出口条件
 
 | 阶段 | 读哪份参考 | 进入下一阶段前的证据 |
@@ -262,8 +268,8 @@ B 能运行 Python 时，先读 [标准流程控制器](references/00-controller
 | 03 制作启动 U 盘 | [04 安装介质](references/04-installer.md)、[09 EFI 决策](references/09-efi-diagnostics.md) | 本机 ACPI、来源与有效配置审查、同版本 OC 校验、恢复镜像校验、U 盘内容回读 |
 | 04 从 U 盘安装 macOS | [05 交接](references/05-boot-handoff.md)、失败时 [09 排错](references/09-efi-diagnostics.md) | 用户实际进入桌面；安装过程异常已解决或有明确停止原因 |
 | 05 连接装好的 macOS | [01 远程接入](references/01-remote-access.md) | macOS SSH、硬件与磁盘身份重新核对 |
-| 06 检查和修复硬件 | [06 完善与验收](references/06-postinstall.md) | 显卡驱动重启后按“显卡驱动安装后须做本轮加速验收”运行目标设备的计算与回读。登记结果或待测原因后，按优先级继续下一项可做的硬件检查，并记录第一项实际动作 |
-| 07 从硬盘启动 | [06 完善与验收](references/06-postinstall.md) | 拔 U 盘后实际冷启动 macOS 与 Windows，而非只有文件复制成功 |
+| 06 检查和修复硬件 | [06 测试方法](references/06-postinstall.md)、[11 清单合同](references/11-postinstall-contract.md) | 全机清单已展示且逐行收尾：本轮功能实测／不适用依据／已接受的具体限制；未测或暂跳过不可进入 07 |
+| 07 从硬盘启动 | [06 引导方法](references/06-postinstall.md)、[11 启动项合同](references/11-postinstall-contract.md) | EFI 回读、固件硬盘 OC 启动项与优先顺序先通过 boot-ready；拔盘默认 OC、macOS 与 Windows 冷启动通过 |
 | 08 保存配置和恢复方法 | [08 状态与工具](references/08-state-and-tools.md) | 最终状态表、可用 EFI、恢复方法、已知限制与未测事项 |
 
 遇到错误读取 [07 排错](references/07-troubleshooting.md)，不要为了推进阶段跳过失败证据。任何已完成阶段都可因新证据退回检查。

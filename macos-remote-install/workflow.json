@@ -1,6 +1,6 @@
 {
   "schema": "install-workflow-v1",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "phases": [
     {
       "id": "00-remote",
@@ -233,7 +233,8 @@
         "核验新系统主机密钥",
         "SSH 登录",
         "重新核对硬件、磁盘和实际启动 EFI",
-        "采集 macOS 状态"
+        "采集 macOS 状态",
+        "接通后立即进入 06 全机检查；不写硬盘 ESP，也不因桌面可用宣称安装已全部完成"
       ],
       "verification": [
         "ssh",
@@ -260,6 +261,9 @@
         "有回退与现场恢复方式"
       ],
       "actions": [
+        "运行 collect-macos.sh；与 Windows 清单逐件对照，先向用户展示异常／待测清单",
+        "用 record-devices 登记完整清单；顺序为每张网卡→显卡→无线／蓝牙→USB→音频／存储／电源及系统功能",
+        "某项无解或等现场配合时标 deferred/waiting-user，继续下一项；全部待办处理完且限制明确接受后才 review",
         "对照 Windows 清单逐件盘点本轮设备，分别记录每张网卡、无线与蓝牙",
         "对待修设备按稳定 ID 查询并登记同机成功驱动或上游项目，再在副本上试验",
         "核对设备 ID、系统 build、同机历史和原作者支持范围，依可回退基线逐件修复",
@@ -269,6 +273,7 @@
         "需要插拔、重启、配对或唤醒的步骤合并交给用户"
       ],
       "verification": [
+        "device_audit",
         "rollback_baseline",
         "gpu_test",
         "network_test",
@@ -279,7 +284,15 @@
       ],
       "failure_route": "diagnose-current",
       "resume": "06-devices.failed-function",
-      "next": "07-boot"
+      "next": "07-boot",
+      "device_gate": {
+        "register": "record-devices",
+        "schema": "device-audit-v1",
+        "reference": "references/11-postinstall-contract.md",
+        "deferred_is_complete": false,
+        "source_search_before_repair": true,
+        "esp_write_before_closed": false
+      }
     },
     {
       "id": "07-boot",
@@ -290,14 +303,16 @@
         "目标 ESP 与现有引导"
       ],
       "preconditions": [
+        "阶段 06 清单已封口，实测结果或具体已接受限制均有证据",
         "配置基线可用",
         "具体 ESP 修改已授权"
       ],
       "actions": [
-        "备份 ESP 与启动项",
-        "保留 Microsoft 和 OEM 文件合并 EFI",
-        "回读与注册启动项",
-        "拔 U 盘冷启动两套系统"
+        "核验 06 封口证据、最终 EFI 与目标 ESP，备份 ESP 和固件启动项",
+        "保留 Microsoft/OEM，引导副本仅调整迁移所需的菜单／启动项字段；复制后回读",
+        "首次拔盘重启之前注册指向硬盘 ESP 的固件 Boot####，设置持久 BootOrder 优先并核对 BootNext",
+        "ShowPicker=true，Timeout>=5；boot-ready 校验通过才交付拔盘冷启动指引",
+        "确认无 U 盘时默认进入硬盘 OpenCore，分别冷启动两套系统；缺少实际测试不宣布完成"
       ],
       "verification": [
         "esp_identity",
@@ -305,11 +320,21 @@
         "esp_backup",
         "efi_readback",
         "macos_cold_boot",
-        "windows_cold_boot"
+        "windows_cold_boot",
+        "firmware_entry",
+        "boot_priority",
+        "picker_visible"
       ],
       "failure_route": "diagnose-current",
       "resume": "07-boot.cold-test",
-      "next": "08-delivery"
+      "next": "08-delivery",
+      "boot_gate": {
+        "pre_reboot": "boot-ready",
+        "schema": "boot-readiness-v1",
+        "reference": "references/11-postinstall-contract.md",
+        "copy_only_is_complete": false,
+        "launcher_config_only_is_registered": false
+      }
     },
     {
       "id": "08-delivery",

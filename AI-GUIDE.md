@@ -1,6 +1,6 @@
 # AI 远程协助安装 OpenCore 与 macOS：完整指南
 
-版本 0.2.9。此文件由 SKILL.md 与 references 合并生成。
+版本 0.2.10。此文件由 SKILL.md 与 references 合并生成。
 
 A 是准备安装 macOS 的 Windows 电脑，B 是你和助手聊天的电脑。初次安装可从[新手起步页](START-HERE.md)开始。要让助手执行完整流程，请使用配套脚本。
 
@@ -18,6 +18,7 @@ A 是准备安装 macOS 的 Windows 电脑，B 是你和助手聊天的电脑。
 - [08 状态、进度和配套工具](#section-08-state-and-tools)
 - [09 EFI 生成与排错的固定决策流程](#section-09-efi-diagnostics)
 - [10 先找现成解，再适配本机](#section-10-existing-solutions)
+- [进入桌面后的固定顺序与证据合同](#section-11-postinstall-contract)
 - [案例：14700K＋4070 Ti SUPER](#section-case-14700k-4070ti-super)
 - [原始资料与更新入口](#section-sources)
 
@@ -269,6 +270,12 @@ B 能运行 Python 时，先读 [标准流程控制器](#section-00-controller)�
 - 文件配置、命令成功、驱动加载和实际功能可用，是不同证据层级。报告必须区分。
 - 硬件可行性结论要先查当前原作者资料。尚未采集 GPU 精确型号／ID、目标 macOS 并查证前，不以“新 RTX 加速基本无解”等旧概括劝退。实验性支持需要说明条件和未测项，不能等同于没有加速；按 [硬件分流](#section-02-hardware-routing) 与对应案例继续核验。
 
+## 首次进入 macOS 后的顺序
+
+远程登录成功即进入 06：自动全机扫描，对照 Windows 清单，先展示异常／待测表并 `record-devices`；每张网卡、显卡优先，逐项查同机基线与社区开源方案并修复测试。单项无解先跳过继续其余项，所有未测和限制集中交代；清单关闭前不能写硬盘 ESP。此处必须读 [安装后固定合同](#section-11-postinstall-contract)。
+
+07 必须一起完成已验收 EFI 部署、固件硬盘 OC 启动项和优先顺序、菜单显示与回读；`boot-ready` 通过再交付拔 U 盘冷启动。只复制 EFI 或只设置 LauncherOption 都不算完成。
+
 ## 阶段与出口条件
 
 | 阶段 | 读哪份参考 | 进入下一阶段前的证据 |
@@ -279,8 +286,8 @@ B 能运行 Python 时，先读 [标准流程控制器](#section-00-controller)�
 | 03 制作启动 U 盘 | [04 安装介质](#section-04-installer)、[09 EFI 决策](#section-09-efi-diagnostics) | 本机 ACPI、来源与有效配置审查、同版本 OC 校验、恢复镜像校验、U 盘内容回读 |
 | 04 从 U 盘安装 macOS | [05 交接](#section-05-boot-handoff)、失败时 [09 排错](#section-09-efi-diagnostics) | 用户实际进入桌面；安装过程异常已解决或有明确停止原因 |
 | 05 连接装好的 macOS | [01 远程接入](#section-01-remote-access) | macOS SSH、硬件与磁盘身份重新核对 |
-| 06 检查和修复硬件 | [06 完善与验收](#section-06-postinstall) | 显卡驱动重启后按“显卡驱动安装后须做本轮加速验收”运行目标设备的计算与回读。登记结果或待测原因后，按优先级继续下一项可做的硬件检查，并记录第一项实际动作 |
-| 07 从硬盘启动 | [06 完善与验收](#section-06-postinstall) | 拔 U 盘后实际冷启动 macOS 与 Windows，而非只有文件复制成功 |
+| 06 检查和修复硬件 | [06 测试方法](#section-06-postinstall)、[11 清单合同](#section-11-postinstall-contract) | 全机清单已展示且逐行收尾：本轮功能实测／不适用依据／已接受的具体限制；未测或暂跳过不可进入 07 |
+| 07 从硬盘启动 | [06 引导方法](#section-06-postinstall)、[11 启动项合同](#section-11-postinstall-contract) | EFI 回读、固件硬盘 OC 启动项与优先顺序先通过 boot-ready；拔盘默认 OC、macOS 与 Windows 冷启动通过 |
 | 08 保存配置和恢复方法 | [08 状态与工具](#section-08-state-and-tools) | 最终状态表、可用 EFI、恢复方法、已知限制与未测事项 |
 
 遇到错误读取 [07 排错](#section-07-troubleshooting)，不要为了推进阶段跳过失败证据。任何已完成阶段都可因新证据退回检查。
@@ -468,6 +475,12 @@ v0.2.7 还登记了 v0.2.4、v0.2.5 的 00～04 和 v0.2.6 的 00～06 任务。
 `.gitattributes` 固定本仓库文本检出的 LF。v0.2.4 的源码锁定只对显式登记的 UTF-8 文本做 CRLF→LF 后计算身份；不去掉 BOM、不裁剪空白、不重排 JSON，也不忽略代码改动。ACPI、EFI、备份、日志和验收证据仍按原始字节核对。这样 Windows `core.autocrlf` 不再导致相同源码被误判。[Git 换行属性](https://git-scm.com/docs/gitattributes)
 
 旧任务的原始记录不要手改：新版 `upgrade` 只接受发布归档中预先登记的有限换行形式，完整备份旧状态并记录命中的变体，再切换到新源码身份。未知哈希仍拒绝，不可根据 Agent 猜测增补白名单／改 `sources`。已由其他工具手改过状态的任务要保留改前文件和取证记录，不能把它描述成原控制器自动迁移。升级失败时核对版本、实际内容和证据，不能“为了通过”重算记录。
+
+## 05～07 不再使用概括性“硬件正常”放行
+
+从 05 成功连接开始按 [安装后固定合同](#section-11-postinstall-contract) 工作。06 先扫描、展示异常表并 `record-devices`，每张物理网卡／GPU 对照原 Windows 报告；逐项修复验证，待测和暂跳过仍为未收尾。07 只有清单封口后才可准备；复制后必须注册、回读固件启动项与 BootOrder，`boot-ready` 通过再拔盘冷启动。两个命令只验证并记录，不替 Agent 写 ESP 或修改 A。
+
+v0.2.10 登记 0.2.9 全阶段源码迁移；旧版已到 07/08 的任务回到 06 补齐此门槛，历史审核保留、磁盘内容不回滚。仍在 05/06 保留阶段；复用有依据的旧实测，不重复安装。证据按不可变快照保存，更新清单须用新文件。
 
 ## 01～08 的统一合同
 
@@ -979,13 +992,15 @@ Agent 收到空格后仍缺项的反馈，再检查介质回读、`com.apple.rec
 
 # 06 驱动完善、硬盘引导与验收
 
+**05 接通 macOS 后立即全机扫描并展示问题表；06 所有条目收尾后，07 才能写硬盘 EFI。** 登记清单、优先队列和硬盘启动项验收使用 [安装后固定合同](#section-11-postinstall-contract)，不能仅写“各项通过”跳过。默认每张网卡→显卡→无线／蓝牙→USB→其他硬件与系统功能；某项暂时无解先继续下一项，最后统一确认限制。
+
 ## 进入桌面后先完成全机盘点
 
 1. **逐件列出设备。** 用阶段 01 的 Windows 硬件清单对照当前 macOS 枚举。同一台电脑的两张有线网卡分两行，同一张无线卡的 Wi-Fi 与 USB 蓝牙也分两行。记录显卡、每张网卡、音频输入／输出、USB 控制器，以及用户需要的其他功能。只在 Windows 清单出现的设备也保留一行，检查安装用 EFI 是否临时屏蔽了它。
 2. **逐项分开记录四件事。** 写下设备标识、可用驱动来源、当前是否加载、功能测试结果。同机旧测试另注日期及系统 build。只有设备名、IP 或 kext 加载记录时，将本轮功能列为待测。音频先播放再录音回放，双网卡分别核对接口、协商速率和绑定到目标接口的实际通信。
 3. **查证驱动路线。** 遇到陌生设备或“此型号没有驱动”的初步判断，先核对设备 ID、系统 build、同机备份和阶段 01 的调研，再查原作者的设备表、版本和限制。对 RTX／Sequoia 核对 [NullMoth 设备表](https://github.com/nullmoth/nvidia-macos-driver/blob/main/docs/CARD-SUPPORT.md) 与对应发布包；按具体版本检索安装器中的设备 ID。记录哪些是作者覆盖、同机历史实测、本轮实测。若只查到传统厂商驱动资料或暂未找到可核实来源，记录查过的范围和下一项证据需求。
 4. **当前设备有待办就处理下一件。** 将待查来源、等待现场插拔、等待授权或等待重启的事项保留在对应设备行，立即做其余设备的只读检查、候选查证及已授权的独立工作。写配置和装驱动仍分次试验，先保留能启动的 EFI 和能远程连接的网口。若机器身份、访问或回退条件失效，只暂停依赖这些条件的操作，继续可在 B 完成的核对。
-5. **收尾时逐行核对。** 所有已发现的设备都有结果、下一步或用户明确接受的限制。仍有可做检查时继续阶段 06；需要用户参与时合并为一次简短交接。按阶段合同完成审核后再推进硬盘引导。若控制器报证据损坏，私下记录现场进展并修复证据链，保留正式阶段的真实状态。
+5. **收尾时逐行核对。** 全机清单已登记且每项有本轮功能测试或明确的不适用依据／用户接受的具体限制。deferred、waiting-user 和未测项不能作为已完成进入 07。仍有可做检查时继续阶段 06；需要用户参与时合并为一次简短交接。按阶段合同完成审核后再推进硬盘引导。若控制器报证据损坏，私下记录现场进展并修复证据链，保留正式阶段的真实状态。
 
 例如，重装后的显卡使用通用帧缓冲，历史同机却有 Metal 计算成功记录。显卡这一行应写“本轮待修，核对旧驱动及卸载路径”。同一轮继续查第一网口的实际通信、第二网口能否枚举，以及 Wi-Fi／蓝牙的驱动状态。有了此轮真实的 GPU 任务结果，再更新显卡功能结论。
 
@@ -1045,13 +1060,18 @@ NVIDIA 新驱动、Intel 无线、AMD 图形、Realtek 网卡等各自读取当�
 
 ## 把引导迁移到硬盘
 
-在 U 盘配置已通过当前功能检查后，核对目标物理磁盘与 ESP GUID。读出 ESP 大小和剩余空间；没有 ESP 或容量不足时单独规划，不能直接格式化或扩大它。
+阶段 06 清单封口后才开始。阶段 07 的完整任务是**复制已验收 EFI＋注册指向硬盘的固件启动项＋设为优先＋拔盘实测**，不是仅复制文件。运行期驱动可能同时位于系统卷，EFI 备份不能代替它们的回退。
 
-1. 保存完整 ESP 文件与固件启动项，建立清单／哈希，并确认 Windows 启动恢复入口。
-2. 在 staging 准备合并后的 EFI。保留 EFI/Microsoft、OEM 和已有回退引导文件；如 EFI/BOOT/BOOTx64.efi 已存在，先确定所有者、备份并说明是否需要替换，不默认覆盖。
-3. 核对当前目标后复制 OC 文件和所需启动文件，回读哈希并运行对应校验。不要清空整个 ESP 来腾空间。
-4. 根据主板和系统选择可验证的注册方法：固件的 Add Boot Option、当前 OC 支持的 LauncherOption，或 Windows 的适当启动项工具。目标路径按方案为对应 ESP 上的 EFI/OC/OpenCore.efi 或约定的引导路径；记录创建前后差异。不能靠改名覆盖 Windows 的 bootmgfw.efi 冒充 OC，也不复制别人的 UEFI Boot#### 二进制变量。
-5. 保存工作，拔 U 盘后由用户实测。核对实际启动来源和两套系统冷启动。失败就用原 U 盘／Windows Boot Manager 回退；不要重新安装 macOS 来修复缺失的启动项。
+1. 核对目标物理盘与 ESP GUID、容量和空闲空间，备份完整 ESP、真实固件启动项及顺序，验证恢复入口。没有 ESP 或空间不足需另行规划，不直接清空或扩大。
+2. 在 staging 合并**最后一次实测的运行期 EFI**，保留 Microsoft、OEM；已有 BOOTx64.efi 先认所有者并备份。不要把安装早期、驱动修复前或另一只 U 盘的 EFI 当成最终版本。
+3. 首次迁移 `Misc → Boot → ShowPicker=true`、`Timeout=10`（门槛至少 5 秒）。这只决定 OC 已加载后是否显示菜单，不能创建 BIOS 启动项。仅做迁移所需的菜单／Launcher 字段调整，同版本 ocvalidate 后复制并从 A 回读完整文件哈希。硬件字段或 kext 改动须回到对应功能测试。
+4. **拔 U 盘前**，为目标硬盘 ESP 创建或更新真正的 UEFI `Boot####`，路径通常为 `\EFI\OC\OpenCore.efi`，设为活动并置于持久 `BootOrder` 首位；Windows Boot Manager 保留。核对 `BootNext` 不会覆盖此次选择。已满足则复用，不重复建一堆同名条目。记录执行工具、磁盘 GUID、加载器路径及修改前后回读；禁止改名／覆盖 `bootmgfw.efi`。
+5. 区分**首次登记**与**以后维持**。可用当前系统里适配该固件的注册工具／API 时自动完成；仅有写入成功消息仍须解码回读。若使用已核验的 `bless`／Windows 工具，先确认当前启动链是否重定向 Boot 变量；在被重定向的空间写成功不等于 BIOS 已登记。无法可靠完成时，在第一次拔盘前合并一次 UEFI Shell 的 `bcfg` 或 BIOS Add Boot Option 操作，准确交付目标盘、路径和顺序；不要用泛用盘号或复制其他电脑的 Boot####。
+6. OC 的 `LauncherOption=Full` 可在**这份 OC 自己启动时**建立或维护高优先级启动项，依赖相应版本的 `RequestBootVarRouting`；`LauncherPath=Default` 通常指向自身 OpenCore.efi。只修改硬盘配置而尚未执行它，不能解决“固件还不知道首次去哪里加载它”的问题。在 U 盘 OC 上注册，还可能注册成 U 盘入口。以实际版本文档和固件条件决定是否启用，保留原可用 USB 配置。[OpenCore 官方配置规范](https://github.com/acidanthera/OpenCorePkg/blob/master/Docs/Configuration.tex)、[LauncherOption 说明](https://dortania.github.io/OpenCore-Post-Install/multiboot/bootstrap.html)
+7. 回读 **EFI_GLOBAL_VARIABLE** 下的启动项／顺序，确认路径属于硬盘 ESP；`RequestBootVarRouting` 可重定向 OS 所见的 Boot 变量，因此 Agent 必须注明回读途径，不能把普通 `nvram`／BCD 列表里见到名字当最终证明。按 [固定合同](#section-11-postinstall-contract) 提交 `boot-ready` 后才提示用户关机拔盘。
+8. 一次交给人类：保存工作→关机→拔 U 盘→正常开机（首次应默认进硬盘 OpenCore，无需临时选择 U 盘）→先选 macOS、回连核对实际 EFI→再冷启动 Windows。随后核对默认入口仍为硬盘 OC。失败时保留 07 待修状态，从原 U 盘或 Windows Boot Manager 回退，不重装 macOS，也不报告已完成。
+
+固件差异可能仍需要一次现场设置；目标是在最终拔盘验收前把它处理好，而非保证所有电脑都能在当前 macOS 会话无重启改完。非 UEFI／特殊引导需有独立、可验证的适配方案，不能伪造 UEFI 回执通过门槛。
 
 ## 完成报告
 
@@ -1401,6 +1421,137 @@ python scripts/workflow.py --run "<run>" --json select-source --file "<run>/evid
 
 
 
+<a id="section-11-postinstall-contract"></a>
+
+# 进入桌面后的固定顺序与证据合同
+
+此页在阶段 05 接通 macOS 后读取，与 [06 功能测试方法](#section-06-postinstall) 配合。命令在 B 执行，采集器在 A 执行。这里的 JSON、证据路径和控制器错误码留给 Agent；人类只看简短的进度和问题表。
+
+## 顺序不可跳过
+
+`05 接通 macOS → 06 全机扫描 → 展示问题清单 → 网卡／显卡优先逐项查证与修复 → 全表验收／限制确认 → 07 写硬盘 EFI＋注册固件启动项 → 拔 U 盘冷启动 → 08 交付`
+
+桌面显示正常、能 SSH、已有可启动 U 盘，都不能代替阶段 06。修复期间在可回退的测试 EFI 上工作，不提前把试验配置写到硬盘 ESP。若机器本来就在用硬盘 EFI，先备份并准备可用的外部回退方案，不删除现有引导。
+
+## 一次扫描，先把问题说清楚
+
+1. 运行 `collect-macos.sh` 到新的报告目录，保留时间、命令退出码和错误；失败的采集项不能解释成“没有设备”。读取当前系统 build、PCI／USB、驱动、音频、无线、磁盘、网络及电源状态。
+2. 与阶段 01 **原始 Windows JSON**逐件对照。每个物理网口和 GPU 单列，Wi-Fi 与蓝牙分列；包括只在 Windows 出现、被安装 EFI 屏蔽或未加载驱动的设备。记录稳定硬件 ID、当前驱动、是否枚举和实际功能测试结果。若 Windows 采集本来缺项，从此前报告／主板资料补查，不能靠 macOS 当前枚举缩小检查范围。
+3. 所有机器覆盖 `network/gpu/wifi/bluetooth/usb/audio/storage/cpu-power/sleep/continuity` 十类，必要时添加 `other`（笔记本电池、触控板、摄像头等）。没有某类硬件、没有用户配合测试 Apple 生态功能时也要写明：前者有依据可记不适用；后者是待测，不能当不适用。按用户用途检查接力、通用剪贴板、视频解码等适用功能，不为测试擅自登录 Apple 账户。
+4. 先展示**异常和待测清单**，然后用 `record-devices` 登记完整清单。远程无法证明的功能安排实际工作负载或合并现场测试。清单不是“所有功能已自动扫描通过”的报告。
+
+面向人类的首次输出示例（内容必须替换为本轮实测）：
+
+> **06 · 检查和修复硬件**
+>
+> **现在**　已连上 macOS，完成第一轮检查。
+>
+> | 项目 | 当前情况 | 接下来 |
+> |---|---|---|
+> | 第二个网口 | 未生成网络接口 | 核对屏蔽设置与社区驱动 |
+> | 显卡加速 | 驱动未加载 | 查适配版本并准备回退 |
+> | USB、睡眠 | 尚未实测 | 修复后集中做插拔与唤醒测试 |
+>
+> **接下来**　先处理网卡和显卡，再检查其余项目；暂时修不好的一项会记下来，继续下一项。
+>
+> **请你**　暂时无需操作，保留启动 U 盘。
+
+后续只报完成数量、当前项目及下一项；新问题／待用户操作时再展示相关行，不反复刷全表。
+
+## 固定修复循环
+
+每张网卡 → 显卡 → Wi-Fi／蓝牙 → USB → 音频／存储／CPU 电源 → 睡眠／系统功能 → 其他适用设备。
+
+保持当前 SSH 网口可用；“网卡优先”不表示先卸载正在连接的唯一驱动。对于每项：
+
+1. 以设备 ID＋系统 build／架构查询 [现成方案](#section-10-existing-solutions)：同机成功基线、原作者设备表／发布、维护者 issue／开源项目。有了候选再 `select-source`；不能凭旧常识判新设备永久无解。记录查过的 URL、版本、适用条件、当前支持／限制和下载情况。
+2. 在授权范围内自动下载、核验、备份、准备并尝试已查证的方案。国内网络下载失败按 A／B 代下、中转规则继续。需要新增高影响改动时说明具体变更；不把普通读取和准备反复交给用户。
+3. 单项修改后重连并做**本轮功能测试**。网卡要绑定对应接口实际通信，显卡要验证实际渲染／Metal 工作负载；详见 06。只有型号、显存、驱动加载、IP 或旧案例，不能填 `passed`。
+4. 同方案相同证据两轮无进展、无已核实方案、包不可得：保存原因、来源、尝试及回退，置 `deferred`，继续下一项。等待插线／试听／重启置 `waiting-user`，也不阻塞独立检查。
+5. 可自动工作的队列为空，再一次性给出现场测试清单和仍受限项。用户明确接受具体限制后填 `accepted-limit`；“先跳过”只表示继续其他项目，不表示验收通过。全部行封口后才能阶段 06 review。不得通过删除第二张网卡、把待测改成不适用或另建空任务绕过。
+
+## 清单数据与命令
+
+每次保存**新文件**，不要改已入账证据。所有路径相对私有任务目录，不含凭据。`device-audit-v1` 必需顶层字段：
+
+| 字段 | 内容 |
+|---|---|
+| `schema`, `machine_uuid`, `macos_build` | schema 名、本任务 A 的身份、此次系统 build |
+| `windows_inventory` | 阶段 01 的原始 `collect-windows.ps1` JSON |
+| `macos_inventory`, `coverage_review` | 此轮采集索引和逐件覆盖对照文件；记录采集失败的处理 |
+| `presented` | 已向用户展示问题清单的交接记录（不是尚未发送的草稿） |
+| `rollback` | 当前可用 EFI、系统卷驱动的卸载／回退方式与备用连接记录 |
+| `tested_config`, `tested_efi_manifest` | 此轮验收所用 EFI 配置、全 EFI 文件哈希清单 |
+| `items` | 全机设备／功能行，必须覆盖以上十类 |
+
+一行的格式如下（示意；不能用这一行替代整机清单）：
+
+```json
+{
+  "id": "nic-2", "category": "network", "name": "第二个物理网口",
+  "hardware_id": "本机 PCI vendor:device 和端口位置",
+  "windows_ids": ["原始 Windows PNPDeviceID"],
+  "observed": "PCI 可见，尚无网络接口", "driver_state": "missing",
+  "status": "pending", "next_action": "查驱动与安装期设备屏蔽",
+  "evidence": ["evidence/current-pci.txt"], "research": []
+}
+```
+
+- `status`：`pending/repairing/waiting-user/deferred/passed/accepted-limit/not-applicable`。所有原设备行在后续版本保留；`id/category/hardware_id` 不换名掩盖旧问题，可新增发现项。
+- `windows_ids`：物理网卡／GPU 对应原始 `PNPDeviceID`，每张单列。控制器从原 Windows 清单核对 PCI／USB 的 Net／Display 及 GPU，漏掉一个即拒绝；它不能发现原始采集从未发现的硬件，其他功能仍需覆盖审核。
+- `passed` 增加 `test: {"kind":"functional","basis":"tool 或 human","result":"具体结果","evidence":"本轮结果文件"}`。`inspection`／`source-review` 不算功能通过。
+- `accepted-limit` 需 `reason` 与 `acceptance`（用户明确接受该项限制的记录路径）。`not-applicable` 需 `reason` 与 `applicability`（不适用依据路径）；实际枚举的网卡／GPU 不能填不适用，用户决定不用也记具体限制。
+- 未关闭项需 `next_action`。`repairing/deferred` 或 `repair_attempted=true` 需非空 `research`；每项为 `{"url":"https://原作者页面","finding":"适用条件／无支持／下载失败等实际发现","evidence":"查证记录路径"}`。
+- 系统 build、驱动或运行 EFI 改变后，重新验证受影响项和基本连接／显示，更新配置快照与全文件清单；不继承未验证的“稳定”。
+
+```text
+python scripts/workflow.py --run "任务目录" --json record-devices --file "任务目录/evidence/devices-01.json"
+python scripts/workflow.py --run "任务目录" --json status
+```
+
+`device_queue.next_item` 指出下一项，优先网络／GPU；等待用户和暂时无解项后置。整个清单仍开放时不能进入 07。逐项修复仍使用原 `select-source → problem/diagnose → repair-result`（实际故障需要诊断时），再登记新清单。phase 06 review 保留 `source_plans`、各项合同证据；`device_audit` 检查指向最新已登记清单。无须为了登记清单改动 A。
+
+## 硬盘引导必须是一次完整交接
+
+遵循 [06 硬盘引导操作](#section-06-postinstall)。**复制文件、固件启动项、启动顺序和 OC 菜单是四件事**。不能只复制 EFI 或只设置 LauncherOption 就让用户拔盘试启动。
+
+默认 UEFI 路线的 `boot-readiness-v1` 必需字段：
+
+```json
+{
+  "schema": "boot-readiness-v1", "machine_uuid": "本任务 A UUID",
+  "firmware_mode": "UEFI", "esp_guid": "目标硬盘 ESP GUID",
+  "backup": "evidence/boot-backup.json", "authorization": "evidence/esp-scope.txt",
+  "config": "evidence/esp-readback/OC/config.plist", "readback": "evidence/efi-hashes.json",
+  "windows_preserved": "evidence/windows-boot-preserved.json",
+  "registration_method": "实际执行的方法及工具版本",
+  "variable_namespace": "EFI_GLOBAL_VARIABLE",
+  "entry": {"id": "Boot0007", "active": true, "esp_guid": "同一目标硬盘 ESP GUID", "path": "\\EFI\\OC\\OpenCore.efi"},
+  "boot_order": ["Boot0007", "Boot0000"], "boot_next": null,
+  "firmware_readback": "evidence/decoded-firmware-boot-options.json"
+}
+```
+
+示例启动号不是通用值。路径可为经过核验的 `\EFI\OC\OpenCore.efi` 或同一 ESP 的 OC `\EFI\BOOT\BOOTx64.efi`；不得指向 U 盘、覆盖 Windows bootmgfw.efi 或凭名字认启动项。回读必须核对真实固件命名空间，不能用被 OC 重定向的 BootOrder 冒充。Legacy／特殊链式引导先写单独的有据适配方案，当前 UEFI 门槛不接受伪装成已完成。
+
+从 A 回读的配置须为 `Misc → Boot → ShowPicker=true`、`Timeout>=5`；第一次拔盘启动须有时间选系统。与 06 实测配置相比只允许菜单显示／等待、LauncherOption／LauncherPath 的迁移差异。硬件字段改变应返回测试，不能在迁移时顺便换驱动。全 EFI 文件差异另以 `readback` 清单逐件核对，配置校验不能代替 kext 二进制核对。
+
+```text
+python scripts/workflow.py --run "任务目录" --json boot-ready --file "任务目录/evidence/boot-ready-01.json"
+```
+
+通过后才给人一次拔盘冷启动指引。最终新报告在原登记信息上增加 `cold_boot`：`default_oc_observed=true`、`active_efi_evidence` 路径，以及 `macos/windows` 各自的 `{usb_removed:true,success:true,evidence:"本轮冷启动记录路径"}`；在 07 review 顶层以 `boot_manifest` 引用。冷启动实测不能使用 `accepted-limit` 跳过。备份、EFI 文件回读、真实启动项、BootOrder、两套系统均核对后才进入 08。
+
+若启动项暂不能在 macOS 远程准确注册／读回，保留 U 盘，提前合并一次 BIOS Add Boot Option 或 UEFI Shell 现场操作，目标路径与磁盘必须填好；不承诺任意固件都能零人工。不得先让用户拔 U 盘启动 Windows，再补做本来缺失的启动项。
+
+## 旧任务升级
+
+已登记源码的旧任务用 `upgrade`。05/06 保留当前位置；旧版 07/08 回到 06 补验，旧审查存历史，磁盘实际内容不回滚、不格式化、已有有效实测可复用。完成新清单后再核对已有硬盘引导并补齐 07 证据，不要求无意义地重复安装或写盘。
+
+控制器核对覆盖、状态、证据字节和配置关系，不能证明日志内容诚实或阻止 Agent 绕过工具直接操作。完整实机结果仍需本轮测试。
+
+
+
 <a id="section-case-14700k-4070ti-super"></a>
 
 # 案例：14700K＋4070 Ti SUPER
@@ -1516,5 +1667,7 @@ WorkBuddy 在显卡检查后列出了待办，用户指定网卡后才继续排�
 - [键盘唤醒分类](https://dortania.github.io/OpenCore-Post-Install/usb/misc/keyboard.html)
 
 Realtek／其他网卡的实验分支会变化，因此本包不把某个 fork 写为所有芯片的固定来源。Agent 用采集的 vendor/device/subsystem ID 查原作者 README、源码匹配表、目标 macOS 与发布记录，确认后记录准确仓库和提交。搜索不到可复核证据就报告未知，而不是编造驱动名称或地址。
+
+2026-11-05 对照 [OpenCore 官方配置规范](https://github.com/acidanthera/OpenCorePkg/blob/master/Docs/Configuration.tex) 的 LauncherOption、LauncherPath、RequestBootVarRouting 与 ShowPicker：固件登记发生于加载器执行，Boot 变量可能被重定向。首次硬盘启动不能仅以配置键或复制成功验收；配合 [LauncherOption 指引](https://dortania.github.io/OpenCore-Post-Install/multiboot/bootstrap.html) 核对本次使用版本与实际固件。
 
 2026-11-05 核对的 RapidEFI GUI 顺序和 Windows 默认桌面路径，依据 [RapidEFI 快速开始](https://github.com/JeoJay127/RapidEFI-Tool#快速开始)、[文件输出实现](https://github.com/JeoJay127/RapidEFI-Tool/blob/main/lib/utils/file_util.dart) 与 [应用启动入口](https://github.com/JeoJay127/RapidEFI-Tool/blob/main/lib/main.dart)。OpenCore 的恢复项辅助分类和空格展开依据 [官方 Configuration.tex 中 HideAuxiliary](https://github.com/acidanthera/OpenCorePkg/blob/master/Docs/Configuration.tex)。执行时仍固定所用版本并核对实际界面。

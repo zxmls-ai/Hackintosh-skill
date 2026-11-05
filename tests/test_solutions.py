@@ -12,6 +12,7 @@ sys.path.insert(0, str(SCRIPTS))
 import solutions
 import workflow as flow
 from ssh_transport import Fault
+from test_postinstall import register_fixture
 
 
 class SolutionTests(unittest.TestCase):
@@ -21,6 +22,7 @@ class SolutionTests(unittest.TestCase):
         self.run = Path(tmp.name) / 'run'
         self.state = flow.initialize(self.run)
         self.state.update(phase='06-devices', step='guided-contract')
+        register_fixture(self.run, self.state)
         flow.save(self.run, self.state, 'synthetic-test')
         self.target = '10EC:8127'
         self.hw = self.write('inventory/device.txt', 'synthetic pci enumeration')

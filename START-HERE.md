@@ -1,6 +1,6 @@
 # 第一次用 WorkBuddy 带你安装 macOS
 
-本指南对应 v0.2.9。你在一台电脑上看助手的提示，再到另一台完成需要人到场的操作。
+本指南对应 v0.2.10。你在一台电脑上看助手的提示，再到另一台完成需要人到场的操作。
 
 ## 先认清两台电脑
 
@@ -20,7 +20,7 @@
 在 **B** 打开 WorkBuddy，选择使用的模型（例如 DeepSeek），发送下面两行即可。
 
 ```text
-请读取 https://github.com/zxmls-ai/Hackintosh-skill 的 README 和 macos-remote-install/SKILL.md，带我在另一台电脑安装 macOS，保留 Windows。
+请读取 https://github.com/zxmls-ai/Hackintosh-skill 的 README 和 macos-remote-install/SKILL.md，带我在另一台电脑安装 macOS，首次进入 macOS 并接通后，先完整扫描并展示硬件／功能问题表，网卡和显卡优先逐项查证、修复和验收；全部条目收尾后，才把已验收 EFI 和固件启动项一起迁移到硬盘。保留 Windows。
 请先用新手能懂的话介绍准备工作，每次告诉我在哪台电脑做什么。清空 U 盘或分区前请先和我核对。
 ```
 
@@ -45,8 +45,8 @@
 | 03 制作启动 U 盘 | 先选 a · RapidEFI 生成后适配（推荐）、b · 相似配置适配或 c · AI 按官方模板生成，再按提示插 U 盘并核对清空目标。有桌面控制能力的助手可自动操作 RapidEFI，并从实际桌面取回产物。 |
 | 04 从 U 盘安装 macOS | 在 A 进入 OpenCore，文字菜单用上下键，图形菜单用左右键，回车启动；只看到 Windows 时先按空格显示隐藏的安装／恢复项。进入恢复环境后按清单选预留分区，安装并初始化到桌面。 |
 | 05 连接装好的 macOS | 在 A 的系统设置中开启远程登录，助手重新连接新系统。 |
-| 06 检查和修复硬件 | 助手逐项验证显卡加速、网络和 USB。需要插拔设备、配对或测试唤醒时，它会给一个具体动作。 |
-| 07 从硬盘启动 | 有可用备份和启动 U 盘后，将已验证的启动文件部署到硬盘。你拔掉 U 盘，分别检验 macOS 和 Windows。 |
+| 06 检查和修复硬件 | 先给你问题清单，优先修网卡和显卡，再检查 USB、无线和系统功能。暂时修不好就继续下一项，最后一起确认剩余限制。 |
+| 07 从硬盘启动 | 清单收尾后，助手把已验收 EFI、硬盘启动项和默认顺序一起配置好。等它提示再拔 U 盘：正常开机应先看到 OpenCore，再分别检验两套系统。 |
 | 08 保存配置和恢复方法 | 你会收到启动配置、已测与待测功能，以及出问题时怎么恢复。 |
 
 继续旧任务时，保留 B 上的原任务目录，让助手按记录续接。到了需要选择磁盘的界面，如果名称、容量或所属磁盘和提示对不上，先停在当前画面，拍照发给 B 的助手核对。
@@ -54,6 +54,6 @@
 ## 其他使用方式
 
 - 支持标准技能的客户端可加载 [SKILL.md](macos-remote-install/SKILL.md)。只能传一个文本文件时，可读 [单文件指南](AI-GUIDE.md)。用到配套程序时，仍需提供完整包。
-- WorkBuddy 客户端若有本地技能导入入口，下载这个 ZIP 后选择导入。也可以直接使用上面的仓库链接或解压目录。[下载 v0.2.9 WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.9.zip) · [查看包校验值](https://github.com/zxmls-ai/Hackintosh-skill/blob/main/downloads/SHA256SUMS.txt)
+- WorkBuddy 客户端若有本地技能导入入口，下载这个 ZIP 后选择导入。也可以直接使用上面的仓库链接或解压目录。[下载 v0.2.10 WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.10.zip) · [查看包校验值](https://github.com/zxmls-ai/Hackintosh-skill/blob/main/downloads/SHA256SUMS.txt)
 - 本版处于测试阶段。能否安装、能修复哪些功能，需要根据 A 的真实硬件和你的实际测试判断。[验证范围](VALIDATION.md)
 - 反馈请附当时的阶段、已做操作和卡住的界面，先遮盖密码、密钥和机器序列号。[测试反馈表](TEST-FEEDBACK.md)

@@ -1,4 +1,4 @@
-# Hackintosh-skill · v0.2.9
+# Hackintosh-skill · v0.2.10
 
 你可以在一台电脑上和 AI 助手聊天，让它帮你在另一台 Windows 电脑上检查硬件、准备安装 U 盘，再安装 macOS。默认保留 Windows。
 
@@ -41,7 +41,7 @@
 
 第一轮会先介绍两台电脑的分工，再给一段完整命令。你在 A 粘贴运行一次，把结果发回 B。助手核对连接后，就可以自动检查硬件。已有受控任务会按保存的进度继续。
 
-想先看看助手会怎么说，可以打开[新手对话预览](新手对话预览.md)。习惯用 WorkBuddy 技能导入的用户，可以直接[下载 v0.2.9 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.9.zip)。遇到仓库访问问题时，见[新手起步](START-HERE.md)。
+想先看看助手会怎么说，可以打开[新手对话预览](新手对话预览.md)。习惯用 WorkBuddy 技能导入的用户，可以直接[下载 v0.2.10 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.10.zip)。遇到仓库访问问题时，见[新手起步](START-HERE.md)。
 
 ## 给 Agent 的入口说明
 
@@ -56,11 +56,12 @@
 | [macos-remote-install/SKILL.md](macos-remote-install/SKILL.md) | 跨 Agent 的精简技能入口，按阶段加载资料 |
 | [AI-GUIDE.md](AI-GUIDE.md) | 从相同内容合成的单文件指南，适合直接附给 Agent |
 | [START-HERE.md](START-HERE.md) | 第一次启动、离线读取及 WorkBuddy 使用方式 |
-| [WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.9.zip) | 下载 ZIP，供支持本地技能导入的 WorkBuddy 客户端使用 |
+| [WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.10.zip) | 下载 ZIP，供支持本地技能导入的 WorkBuddy 客户端使用 |
 | [references](macos-remote-install/references/) | SSH、兼容性、备份分区、EFI、安装、驱动、排错、续接 |
 | [流程规范与调用方式](macos-remote-install/references/00-controller.md) | 固定输入输出、错误恢复、断点续接与合同审核 |
 | [恢复界面安装步骤](macos-remote-install/references/05-boot-handoff.md) | Agent 填好目标后交付：抹掉、安装、重启选择、初始化 |
 | [安装后设备验收](macos-remote-install/references/06-postinstall.md) | Metal 计算回读、双网卡、Wi-Fi／蓝牙和下一项操作 |
+| [安装后固定合同](macos-remote-install/references/11-postinstall-contract.md) | 全机问题清单、修复顺序、阶段门槛与硬盘固件启动项 |
 | [现成方案优先手册](macos-remote-install/references/10-existing-solutions.md) | 给 Agent 的查找、选用、审计与交接步骤 |
 | [EFI 决策与排错](macos-remote-install/references/09-efi-diagnostics.md) | 起点选择、有效配置审计、基线比较与有限试验，避免无依据堆补丁 |
 | [阶段合同](macos-remote-install/workflow.json) | 00～08 的顺序、输入、动作、验收和恢复位置 |
@@ -72,6 +73,14 @@
 **第一次连接。** 在 A 用 Windows 管理员账户登录，在 B 携带 A 输出的两行结果一次回复。第一行按提示填密码或 B 上的密码文件完整路径，第二行保留原样。已有凭据可填“已提供”。想装的 macOS 版本可以顺带写，也可以留待助手检查。详细操作见 [准备工作和远程接入](macos-remote-install/references/01-remote-access.md)。
 
 **已有安装任务可按记录续接。** 保存旧快照和任务记录，在独立目录固定新版本。v0.2.0～v0.2.5 的受控任务可在已登记的 00～04 阶段使用 `upgrade` 后运行 `status`。v0.2.6、v0.2.7 可在 00～06 迁移，正在执行的旧版硬件修复先在旧流程收尾。控制器会核对源文件、状态和历史证据。≤0.2.2 已进入 04 的任务需回 03 补验 ACPI。若历史证据已变化，按控制器的恢复说明处理，并在现场记录中单列实际硬件进度。早期 v0.1 任务仍在 00 时可按入口说明初始化。
+
+## 安装后先修硬件，再移除 U 盘
+
+v0.2.8／v0.2.9 的已登记任务也可 `upgrade`。仍在 05/06 时保留阶段；旧 07/08 回到 06 补验新清单，保留历史和实际磁盘内容，不重复安装。详见[旧任务升级](macos-remote-install/references/11-postinstall-contract.md#旧任务升级)。
+
+进入桌面并接通远程登录后，助手先对照 Windows 清单检查全部硬件与适用系统功能，展示未工作／未测试项目。默认每张网卡和显卡优先，查社区与开源项目、备份后逐项修复；暂时修不好就继续下一项，最后集中交代限制。清单未收尾不能跳到写硬盘 EFI。
+
+硬盘引导同时核对 EFI 文件、真实固件 OpenCore 启动项、默认顺序和菜单显示，再安排第一次拔 U 盘冷启动。仅复制文件、设置 LauncherOption、看到设备名称，都不代表功能或启动已通过。参见 [安装后固定合同](macos-remote-install/references/11-postinstall-contract.md)。
 
 ## 自动化的边界
 

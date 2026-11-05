@@ -32,10 +32,15 @@ run cpu sysctl machdep.cpu.brand_string hw.physicalcpu hw.logicalcpu hw.memsize
 run disks diskutil list -plist
 run physical-disks diskutil list physical
 run root-volume diskutil info -plist /
-run hardware system_profiler SPHardwareDataType SPDisplaysDataType SPUSBDataType SPNetworkDataType SPBluetoothDataType SPNVMeDataType SPSerialATADataType -detailLevel mini -timeout 120
+run hardware system_profiler SPHardwareDataType SPDisplaysDataType SPUSBDataType SPNetworkDataType SPBluetoothDataType SPAirPortDataType SPAudioDataType SPNVMeDataType SPSerialATADataType -detailLevel mini -timeout 120
 run network-ports networksetup -listallhardwareports
 run network-order networksetup -listnetworkserviceorder
 run route route -n get default
+run interfaces ifconfig -a
+run network-counters netstat -ibn
+run pci ioreg -r -c IOPCIDevice -l
+run usb-tree ioreg -p IOUSB -l -w 0
+run nvram nvram -p
 run loaded-kexts kmutil showloaded
 run power-settings pmset -g custom
 run power-assertions pmset -g assertions

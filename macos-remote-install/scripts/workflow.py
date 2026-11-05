@@ -17,17 +17,21 @@ from prepare_ssh_handoff import render, SOURCE
 from ssh_transport import Fault, parse_packet, verify_connection, credential_from_bundle
 from acpi_guard import check_acpi_evidence
 from solutions import assess as assess_solution
+from postinstall_guard import check_devices, device_queue, check_boot
 
-VERSION = '0.2.9'
+VERSION = '0.2.10'
 ROOT = Path(__file__).resolve().parent
 CONTRACT_PATH = ROOT.parent / 'workflow.json'
 UPGRADE_PATH = ROOT.parent / 'upgrades.json'
 CONTRACT = read_json(CONTRACT_PATH)
 PHASES = {p['id']:p for p in CONTRACT['phases']}
-TRACKED = ['workflow.py','ssh_transport.py','probe-windows.ps1','enable-windows-ssh.ps1','prepare_ssh_handoff.py','agentkit.py','acpi_guard.py','efi_audit.py','metal_smoke_test.js','solutions.py']
+TRACKED = ['workflow.py','ssh_transport.py','probe-windows.ps1','enable-windows-ssh.ps1','prepare_ssh_handoff.py','agentkit.py','acpi_guard.py','efi_audit.py','metal_smoke_test.js','solutions.py','postinstall_guard.py','collect-macos.sh']
 
 # code -> summary, diagnostic action, human input, fixed resume action
 ERRORS = {
+    'DEVICE_AUDIT_REQUIRED': ('还没完成本轮全机检查清单。','我会对照安装前的硬件，补查每件设备和系统功能。','暂时无需操作。','record-devices'),
+    'DEVICE_AUDIT_OPEN': ('硬件清单还有待处理或待测项。','我会继续可做的修复，再集中交代仍受限的项目；暂不写入硬盘引导。','需要现场测试或接受限制时，我会一起说明。','record-devices'),
+    'BOOT_REGISTRATION_REQUIRED': ('硬盘引导的启动项还没核验完整。','我会核对固件中的硬盘 OpenCore 路径、启动顺序和菜单设置。','先保留 U 盘，等检查完成再拔盘重启。','boot-ready'),
     'EFI_PICKER_INVALID': ('安装 EFI 还在隐藏恢复等辅助条目。','我会在测试副本将 HideAuxiliary 设为 false，重新校验并回读 U 盘。','暂时无需操作。','review'),
     'EFI_ROUTE_REQUIRED': ('备份与安装空间已确认，先选择 EFI 制作方式。','选定后我会按这条路线制作并检查启动文件。','回复 a、b 或 c。','choose-efi'),
     'SOLUTION_REQUIRED': ('还需确认现有方案适合这台电脑。','我会先核对同机成功记录，再比较工具作者提供的方案。','暂时无需操作。','select-source'),
@@ -228,6 +232,13 @@ def upgrade(run,state):
         state.setdefault('superseded_guided_reviews',[]).extend(r for r in reviews if r['phase']=='03-media')
         state['guided_reviews']=[r for r in reviews if r['phase']!='03-media']
         state.update(phase='03-media',step='guided-contract',status='planned',failure=None)
+    # Old 06/07 reviews did not enforce a per-device ledger or firmware receipt.
+    if state['phase'] in ('07-boot', '08-delivery'):
+        state.setdefault('superseded_guided_reviews', []).extend(
+            r for r in state.get('guided_reviews', []) if r['phase'] in ('06-devices', '07-boot', '08-delivery'))
+        state['guided_reviews'] = [r for r in state.get('guided_reviews', []) if r['phase'] not in ('06-devices', '07-boot', '08-delivery')]
+        state.update(phase='06-devices', step='guided-contract', status='planned', failure=None)
+        state['postinstall_recheck'] = True  # Reuse valid evidence; never undo disk writes.
     state.setdefault('upgrades',[]).append({'from':previous,'to':VERSION,'backup':backup,'registered_line_ending_variants':variants})
     save(run,state,f'upgrade-{previous}-to-{VERSION}')
 
@@ -446,6 +457,8 @@ def check_trial_budget(state, choice):
 def select_source(run, state, plan_path):
     if state['phase'] not in SOURCE_PHASES or state['step'] == 'complete':
         raise Fault('ACTION_NOT_ALLOWED')
+    if state['phase'] == '06-devices':
+        device_record(run, state)
     route = efi_choice(run, state)
     if state['phase'] == '03-media' and route is None and not has_efi_source(state):
         raise Fault('EFI_ROUTE_REQUIRED')
@@ -550,6 +563,41 @@ def re_full_code(value):
     return isinstance(value,str) and 1<=len(value)<=60 and all(c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for c in value)
 
 
+def device_record(run, state, closing=False):
+    registered = state.get('device_audit')
+    if not registered:
+        raise Fault('DEVICE_AUDIT_REQUIRED')
+    for ref in [registered['manifest'], *registered['proofs']]:
+        verify_evidence(run, ref)
+    return check_devices(run, state.get('machine_a'), registered['manifest']['path'], closing=closing)
+
+
+def record_devices(run, state, path):
+    if state['phase'] != '06-devices' or state['step'] != 'guided-contract':
+        raise Fault('ACTION_NOT_ALLOWED')
+    previous = device_record(run, state)[0] if state.get('device_audit') else None
+    relative = Path(path).absolute().relative_to(run.absolute()).as_posix()
+    data, proofs = check_devices(run, state.get('machine_a'), relative, previous=previous)
+    if state.get('device_audit'):
+        state.setdefault('device_audit_history', []).append(state['device_audit'])
+    state['device_audit'] = {'manifest': proofs[0], 'proofs': proofs[1:], 'queue': device_queue(data)}
+    state['verification_proofs'].extend(proofs)
+    state.update(status='planned', failure=None)
+    save(run, state, 'device-audit-recorded')
+
+
+def boot_ready(run, state, path):
+    if state['phase'] != '07-boot' or state['step'] != 'guided-contract':
+        raise Fault('ACTION_NOT_ALLOWED')
+    devices, _ = device_record(run, state, closing=True)
+    relative = Path(path).absolute().relative_to(run.absolute()).as_posix()
+    _, proofs = check_boot(run, state.get('machine_a'), relative, devices)
+    state['boot_readiness'] = {'manifest': proofs[0], 'proofs': proofs[1:]}
+    state['verification_proofs'].extend(proofs)
+    state.update(status='waiting_user', failure=None)
+    save(run, state, 'internal-boot-registered-before-reboot')
+
+
 def guided_review(run, state, report_path):
     contract = PHASES[state['phase']]
     if contract['mode'] != 'guided-contract':
@@ -565,6 +613,8 @@ def guided_review(run, state, report_path):
         proofs.extend(check_acpi_evidence(run,state.get('machine_a'),check['manifest']))
         proofs.extend(selected_solution(run, state, report.get('source_plan'), topic='efi', require_efi=True)['proofs'])
     elif state['phase'] == '06-devices':
+        devices, device_proofs = device_record(run, state, closing=True)
+        proofs.extend(device_proofs)
         paths = report.get('source_plans')
         if not isinstance(paths, list) or any(not isinstance(p, str) for p in paths):
             raise Fault('SOLUTION_REQUIRED')
@@ -573,16 +623,33 @@ def guided_review(run, state, report_path):
         reason = report.get('no_driver_changes')
         if not paths and not (isinstance(reason, str) and reason.strip()):
             raise Fault('SOLUTION_REQUIRED')
+        if not paths and any(i.get('repair_attempted') is True for i in devices['items']):
+            raise Fault('SOLUTION_REQUIRED')
         for path in paths:
             proofs.extend(selected_solution(run, state, path)['proofs'])
-    limited = False
+    elif state['phase'] == '07-boot':
+        devices, device_proofs = device_record(run, state, closing=True)
+        proofs.extend(device_proofs)
+        ready = state.get('boot_readiness')
+        if not ready:
+            raise Fault('BOOT_REGISTRATION_REQUIRED')
+        for ref in [ready['manifest'], *ready['proofs']]:
+            verify_evidence(run, ref)
+        _, boot_proofs = check_boot(run, state.get('machine_a'), report.get('boot_manifest'), devices, cold=True)
+        before = read_json(confined(run, ready['manifest']['path']))
+        after = read_json(confined(run, report['boot_manifest']))
+        if any(before.get(k) != after.get(k) for k in ('esp_guid', 'entry', 'config', 'boot_order', 'boot_next')):
+            raise Fault('BOOT_REGISTRATION_REQUIRED', {'reason': 'boot target changed; repeat preflight and cold tests'})
+        proofs.extend(boot_proofs)
+    limited = state['phase'] == '06-devices' and any(
+        i['status'] == 'accepted-limit' for i in device_record(run, state)[0]['items'])
     for name in contract['verification']:
         check = report['checks'][name]
         # This validates report shape and provenance, not the semantics of Agent assertions.
         if check.get('result') not in ('pass','accepted-limit') or check.get('basis') not in ('tool','human','source-review') or not check.get('evidence'):
             raise Fault('CONTRACT_REPORT_INVALID')
         if check['result'] == 'accepted-limit':
-            if name in ('authorization','disk_identity','esp_identity','usb_identity','target_reidentified','backup_content','restore_sample') or not check.get('user_acceptance'):
+            if state['phase'] == '07-boot' or name in ('device_audit','authorization','disk_identity','esp_identity','usb_identity','target_reidentified','backup_content','restore_sample') or not check.get('user_acceptance'):
                 raise Fault('CONTRACT_REPORT_INVALID')
             limited = True
         proofs.extend({'path':p, **sha(confined(run,p))} for p in check['evidence'])
@@ -681,6 +748,8 @@ def render_result(state, override=None):
             result.update(next_action='correct-efi-then-review',contract=contract)
         elif code=='EFI_PICKER_INVALID':
             result.update(next_action='correct-efi-then-review',contract=contract)
+        elif code in ('DEVICE_AUDIT_REQUIRED','DEVICE_AUDIT_OPEN','BOOT_REGISTRATION_REQUIRED'):
+            result.update(next_action=command,contract=contract)
         elif code=='SOURCE_CHANGED':
             result.update(next_action='upgrade')
         elif code in ('SOLUTION_REQUIRED', 'SOLUTION_RETRY_LIMIT'):
@@ -717,6 +786,29 @@ def render_result(state, override=None):
         if reviews and reviews[-1].get('limited'):
             summary = '上一阶段的结果已记录，其中有你同意暂时保留的限制。'
         result.update(next_action='guided-contract',contract=contract)
+        if phase == '06-devices':
+            audit = state.get('device_audit')
+            result['next_action'] = 'record-devices'
+            if audit:
+                queue = audit['queue']
+                result['device_queue'] = queue
+                summary = f"硬件与功能清单已检查 {queue['closed']}/{queue['total']} 项。"
+                if queue['next_item']:
+                    action = '继续处理 ' + queue['next_item'] + '，先查已维护的项目和同机实测方案。'
+                elif queue['open_items']:
+                    action = '可自动处理的项目已完成，我会集中给出待测和暂时受限的清单。'
+                    human = '按接下来的短清单配合现场测试，或决定是否保留具体限制。'
+                else:
+                    result['next_action'] = 'review'
+                    action = '清单已逐项收尾，审核通过后才准备硬盘引导。'
+        elif phase == '07-boot':
+            result['next_action'] = 'boot-ready'
+            action = '我会备份并写入已验收 EFI，同时注册硬盘 OpenCore 启动项、设为优先并回读。'
+            if state.get('boot_readiness'):
+                result['next_action'] = 'cold-boot-then-review'
+                summary = '硬盘 EFI、固件启动项与优先顺序已核对，等待拔 U 盘实测。'
+                action = '确认默认进入硬盘 OpenCore，再分别冷启动 macOS 和 Windows。'
+                human = '保存工作后关机、拔下 U 盘，再开机。应先看到 OpenCore 菜单；异常拍照反馈，保留 U 盘用于恢复。'
         if phase=='03-media':
             choices = state.get('source_decisions', {}).get(phase, {}).values()
             if not any(choice['topic'] == 'efi' for choice in choices):
@@ -757,7 +849,7 @@ def main():
     p = sub.add_parser('choose-efi'); p.add_argument('--choice',required=True,choices=EFI_CHOICES)
     p = sub.add_parser('import'); p.add_argument('--file',required=True,type=Path)
     p = sub.add_parser('verify'); group=p.add_mutually_exclusive_group(); group.add_argument('--credential-file',type=Path); group.add_argument('--key-file',type=Path)
-    for action in ('diagnose','repair-result','review','problem','select-source'):
+    for action in ('diagnose','repair-result','review','problem','select-source','record-devices','boot-ready'):
         p=sub.add_parser(action); p.add_argument('--file',required=True,type=Path)
     args=parser.parse_args()
     run=args.run.absolute()
@@ -787,6 +879,8 @@ def main():
                     elif args.command=='diagnose': diagnosis(run,state,args.file)
                     elif args.command=='repair-result': repair_result(run,state,args.file)
                     elif args.command=='review': guided_review(run,state,args.file)
+                    elif args.command=='record-devices': record_devices(run,state,args.file)
+                    elif args.command=='boot-ready': boot_ready(run,state,args.file)
                     elif args.command=='problem': problem(run,state,args.file)
                     elif args.command=='select-source': registered=select_source(run,state,args.file)
                 except Fault as exc:
