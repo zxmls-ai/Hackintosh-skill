@@ -1,5 +1,9 @@
 # Hackintosh-skill · v0.2.13
 
+<!-- yarkr:badges:start -->
+[![Indexed on Yarkr](https://api.yarkr.com/functions/v1/api/api/v1/badges/repos/zxmls-ai/Hackintosh-skill/version.svg)](https://yarkr.com/arks/zxmls-ai/hackintosh-skill)
+<!-- yarkr:badges:end -->
+
 本版优先使用 1401 自动构建 EFI，RapidEFI 作为备用；安装前说明哪些功能需要装完系统后继续修复。仍处测试阶段，详见下方测试声明与验证范围。
 
 你可以在一台电脑上和 AI 助手聊天，让它帮你在另一台 Windows 电脑上检查硬件、准备安装 U 盘，再安装 macOS。默认保留 Windows。
@@ -119,3 +123,35 @@ Windows SSH 代码以 [enable-windows-ssh.ps1](macos-remote-install/scripts/enab
 需要完整源码，可用仓库首页 **Code → Download ZIP**，或让 Agent 克隆仓库并固定提交号。WorkBuddy 包可用[下载校验值](https://github.com/zxmls-ai/Hackintosh-skill/blob/main/downloads/SHA256SUMS.txt)核对。
 
 [MIT 许可证](LICENSE) 仅覆盖本仓库原创内容；链接到的操作系统、工具与驱动保留各自许可。
+
+<!-- yarkr:install:start -->
+## Install with Yarkr
+
+This repo is indexed on [Yarkr](https://yarkr.com/arks/zxmls-ai/hackintosh-skill) as the ark [zxmls-ai/hackintosh-skill](https://yarkr.com/arks/zxmls-ai/hackintosh-skill), so its skills install into Claude Code, Codex, Cursor and other agent harnesses with one command.
+
+### CLI
+
+Install the whole ark, which Yarkr keeps equal to this repo:
+
+```bash
+npx yarkr-cli sync zxmls-ai/hackintosh-skill
+```
+
+Or add individual skills:
+
+```bash
+npx yarkr-cli add skill:zxmls-ai/hackintosh-skill/macos-remote-install
+```
+
+No Node.js? `curl -fsSL https://yarkr.com/install.sh | sh` (macOS, Linux) or `irm https://yarkr.com/install.ps1 | iex` (Windows PowerShell) installs `yarkr` as a standalone binary; then type `yarkr` in place of `npx yarkr-cli`.
+
+### MCP
+
+Connect your agent to the ark over MCP:
+
+```bash
+npx yarkr-cli mcp add zxmls-ai/hackintosh-skill
+```
+
+Or point any MCP client at `https://api.yarkr.com/functions/v1/api/mcp/o/zxmls-ai/hackintosh-skill`.
+<!-- yarkr:install:end -->
